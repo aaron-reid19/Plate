@@ -32,9 +32,10 @@ This application will be built as a **Progressive Web App (PWA)** so users can i
 Plate is built around two main ideas:
 
 1. **Fitness Tracking**
-   - Users can track workouts, exercises, sets, reps, weight, meals, calories, macros, and progress.
 
+   - Users can track workouts, exercises, sets, reps, weight, meals, calories, macros, and progress.
 2. **Social Accountability**
+
    - Users can share workouts and food logs as posts, interact with other users, and build a feed based on people they follow.
 
 ---
@@ -197,6 +198,310 @@ Each service is:
 The frontend does not contain backend business logic. It communicates with the backend through the API Gateway.
 
 ---
+
+## Folder Structure
+
+
+```text
+plate/
+├── README.md
+├── .gitignore
+├── package.json
+├── pnpm-workspace.yaml
+├── turbo.json
+├── .env.example
+│
+├── apps/
+│   └── web/
+│       ├── package.json
+│       ├── next.config.ts
+│       ├── tsconfig.json
+│       ├── public/
+│       │   ├── manifest.json
+│       │   ├── icons/
+│       │   └── screenshots/
+│       │
+│       └── src/
+│           ├── app/
+│           │   ├── layout.tsx
+│           │   ├── page.tsx
+│           │   ├── globals.css
+│           │   │
+│           │   ├── auth/
+│           │   │   ├── login/
+│           │   │   │   └── page.tsx
+│           │   │   └── register/
+│           │   │       └── page.tsx
+│           │   │
+│           │   ├── dashboard/
+│           │   │   └── page.tsx
+│           │   │
+│           │   ├── feed/
+│           │   │   └── page.tsx
+│           │   │
+│           │   ├── profile/
+│           │   │   └── [userId]/
+│           │   │       └── page.tsx
+│           │   │
+│           │   ├── workouts/
+│           │   │   ├── page.tsx
+│           │   │   └── new/
+│           │   │       └── page.tsx
+│           │   │
+│           │   ├── food/
+│           │   │   ├── page.tsx
+│           │   │   └── new/
+│           │   │       └── page.tsx
+│           │   │
+│           │   └── tenant/
+│           │       └── settings/
+│           │           └── page.tsx
+│           │
+│           ├── components/
+│           │   ├── ui/
+│           │   │   ├── Button.tsx
+│           │   │   ├── Input.tsx
+│           │   │   ├── Card.tsx
+│           │   │   └── Modal.tsx
+│           │   │
+│           │   ├── layout/
+│           │   │   ├── Navbar.tsx
+│           │   │   ├── Sidebar.tsx
+│           │   │   └── MobileNav.tsx
+│           │   │
+│           │   ├── feed/
+│           │   │   ├── FeedList.tsx
+│           │   │   ├── PostCard.tsx
+│           │   │   ├── LikeButton.tsx
+│           │   │   └── CommentList.tsx
+│           │   │
+│           │   ├── workouts/
+│           │   │   ├── WorkoutForm.tsx
+│           │   │   ├── ExerciseInput.tsx
+│           │   │   └── WorkoutCard.tsx
+│           │   │
+│           │   ├── food/
+│           │   │   ├── FoodLogForm.tsx
+│           │   │   ├── FoodItemInput.tsx
+│           │   │   └── FoodLogCard.tsx
+│           │   │
+│           │   └── profile/
+│           │       ├── ProfileHeader.tsx
+│           │       └── ProfileFeed.tsx
+│           │
+│           ├── features/
+│           │   ├── auth/
+│           │   │   ├── api.ts
+│           │   │   ├── hooks.ts
+│           │   │   └── types.ts
+│           │   │
+│           │   ├── fitness/
+│           │   │   ├── api.ts
+│           │   │   ├── hooks.ts
+│           │   │   └── types.ts
+│           │   │
+│           │   ├── social/
+│           │   │   ├── api.ts
+│           │   │   ├── hooks.ts
+│           │   │   └── types.ts
+│           │   │
+│           │   └── tenant/
+│           │       ├── api.ts
+│           │       ├── hooks.ts
+│           │       └── types.ts
+│           │
+│           ├── lib/
+│           │   ├── api-client.ts
+│           │   ├── auth-token.ts
+│           │   ├── constants.ts
+│           │   └── utils.ts
+│           │
+│           ├── hooks/
+│           │   ├── useAuth.ts
+│           │   └── useDebounce.ts
+│           │
+│           └── types/
+│               ├── api.ts
+│               ├── post.ts
+│               ├── user.ts
+│               ├── workout.ts
+│               └── food.ts
+│
+├── services/
+│   ├── api-gateway/
+│   │   ├── package.json
+│   │   ├── wrangler.toml
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   │       ├── index.ts
+│   │       ├── routes/
+│   │       │   ├── auth.routes.ts
+│   │       │   ├── fitness.routes.ts
+│   │       │   └── social.routes.ts
+│   │       ├── middleware/
+│   │       │   ├── auth.middleware.ts
+│   │       │   ├── cors.middleware.ts
+│   │       │   └── error.middleware.ts
+│   │       ├── clients/
+│   │       │   ├── auth.client.ts
+│   │       │   ├── fitness.client.ts
+│   │       │   └── social.client.ts
+│   │       └── utils/
+│   │           └── response.ts
+│   │
+│   ├── auth-tenant-service/
+│   │   ├── package.json
+│   │   ├── wrangler.toml
+│   │   ├── tsconfig.json
+│   │   ├── migrations/
+│   │   │   └── 001_init_auth_tenant.sql
+│   │   └── src/
+│   │       ├── index.ts
+│   │       ├── routes/
+│   │       │   ├── auth.routes.ts
+│   │       │   ├── tenant.routes.ts
+│   │       │   └── profile.routes.ts
+│   │       ├── controllers/
+│   │       │   ├── auth.controller.ts
+│   │       │   ├── tenant.controller.ts
+│   │       │   └── profile.controller.ts
+│   │       ├── services/
+│   │       │   ├── auth.service.ts
+│   │       │   ├── tenant.service.ts
+│   │       │   └── profile.service.ts
+│   │       ├── repositories/
+│   │       │   ├── user.repository.ts
+│   │       │   ├── tenant.repository.ts
+│   │       │   └── profile.repository.ts
+│   │       ├── middleware/
+│   │       │   ├── require-auth.ts
+│   │       │   └── require-tenant-admin.ts
+│   │       ├── db/
+│   │       │   └── supabase.ts
+│   │       ├── schemas/
+│   │       │   ├── auth.schema.ts
+│   │       │   ├── tenant.schema.ts
+│   │       │   └── profile.schema.ts
+│   │       └── types/
+│   │           ├── user.ts
+│   │           └── tenant.ts
+│   │
+│   ├── fitness-service/
+│   │   ├── package.json
+│   │   ├── wrangler.toml
+│   │   ├── tsconfig.json
+│   │   ├── migrations/
+│   │   │   └── 001_init_fitness.sql
+│   │   └── src/
+│   │       ├── index.ts
+│   │       ├── routes/
+│   │       │   ├── workout.routes.ts
+│   │       │   └── food.routes.ts
+│   │       ├── controllers/
+│   │       │   ├── workout.controller.ts
+│   │       │   └── food.controller.ts
+│   │       ├── services/
+│   │       │   ├── workout.service.ts
+│   │       │   └── food.service.ts
+│   │       ├── repositories/
+│   │       │   ├── workout.repository.ts
+│   │       │   ├── exercise.repository.ts
+│   │       │   ├── food-log.repository.ts
+│   │       │   └── food-item.repository.ts
+│   │       ├── clients/
+│   │       │   └── auth.client.ts
+│   │       ├── db/
+│   │       │   └── supabase.ts
+│   │       ├── schemas/
+│   │       │   ├── workout.schema.ts
+│   │       │   └── food.schema.ts
+│   │       └── types/
+│   │           ├── workout.ts
+│   │           └── food.ts
+│   │
+│   └── social-feed-service/
+│       ├── package.json
+│       ├── wrangler.toml
+│       ├── tsconfig.json
+│       ├── migrations/
+│       │   └── 001_init_social.sql
+│       └── src/
+│           ├── index.ts
+│           ├── routes/
+│           │   ├── post.routes.ts
+│           │   ├── feed.routes.ts
+│           │   ├── comment.routes.ts
+│           │   ├── like.routes.ts
+│           │   └── follow.routes.ts
+│           ├── controllers/
+│           │   ├── post.controller.ts
+│           │   ├── feed.controller.ts
+│           │   ├── comment.controller.ts
+│           │   ├── like.controller.ts
+│           │   └── follow.controller.ts
+│           ├── services/
+│           │   ├── post.service.ts
+│           │   ├── feed.service.ts
+│           │   ├── comment.service.ts
+│           │   ├── like.service.ts
+│           │   └── follow.service.ts
+│           ├── repositories/
+│           │   ├── post.repository.ts
+│           │   ├── comment.repository.ts
+│           │   ├── like.repository.ts
+│           │   └── follow.repository.ts
+│           ├── clients/
+│           │   ├── auth.client.ts
+│           │   └── fitness.client.ts
+│           ├── db/
+│           │   └── supabase.ts
+│           ├── schemas/
+│           │   ├── post.schema.ts
+│           │   ├── comment.schema.ts
+│           │   └── follow.schema.ts
+│           └── types/
+│               ├── post.ts
+│               ├── comment.ts
+│               └── follow.ts
+│
+├── packages/
+│   ├── shared/
+│   │   ├── package.json
+│   │   └── src/
+│   │       ├── types/
+│   │       │   ├── user.ts
+│   │       │   ├── tenant.ts
+│   │       │   ├── post.ts
+│   │       │   ├── workout.ts
+│   │       │   └── food.ts
+│   │       ├── constants/
+│   │       │   ├── roles.ts
+│   │       │   ├── post-types.ts
+│   │       │   └── visibility.ts
+│   │       └── utils/
+│   │           ├── dates.ts
+│   │           └── validation.ts
+│   │
+│   └── config/
+│       ├── eslint/
+│       └── typescript/
+│
+└── docs/
+    ├── diagrams/
+    │   ├── architecture.puml
+    │   ├── deployment.puml
+    │   ├── class-diagram.puml
+    │   ├── erd.puml
+    │   └── activity-diagrams/
+    │       ├── create-account.puml
+    │       ├── create-workout-post.puml
+    │       └── configure-tenant.puml
+    └── api/
+        ├── auth-tenant-service.md
+        ├── fitness-service.md
+        └── social-feed-service.md
+```
+
 
 ## Services
 
