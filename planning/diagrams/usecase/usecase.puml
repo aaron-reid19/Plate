@@ -1,0 +1,100 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Guest
+actor "Platform User" as User
+actor "Tenant Admin" as TenantAdmin
+
+TenantAdmin --|> User
+
+note right of TenantAdmin
+  Tenant is the account/workspace being managed,
+  not a person or actor in the system.
+  Tenant Admin manages tenant account and settings
+  while retaining all platform user capabilities
+end note
+
+rectangle "Plate Multi-Tenant Platform" {
+
+  package "Authentication" {
+    usecase "Register Account" as Register
+    usecase "Log In" as Login
+  }
+
+  package "Tenant Administration" {
+    usecase "Manage Tenant Workspace" as ConfigureTenant
+    usecase "Manage Tenant Profile" as ManageTenantProfile
+    usecase "Manage Tenant Settings" as TenantSettings
+  }
+
+  package "Profiles and Feeds" {
+    usecase "Manage User Profile" as Profile
+    usecase "View User Profile" as ViewProfile
+    usecase "View User Feed" as UserFeed
+    usecase "View Platform Feed" as Feed
+  }
+
+  package "Content and Engagement" {
+    usecase "Create Post" as Post
+    usecase "Create Workout" as Workout
+    usecase "Log Food" as Food
+    usecase "Follow User" as Follow
+    usecase "Like Post" as Like
+    usecase "Comment on Post" as Comment
+  }
+}
+
+together {
+  Register
+  Login
+}
+
+together {
+  ConfigureTenant
+  ManageTenantProfile
+  TenantSettings
+}
+
+together {
+  Profile
+  ViewProfile
+  UserFeed
+  Feed
+}
+
+together {
+  Post
+  Workout
+  Food
+  Follow
+  Like
+  Comment
+}
+
+Guest --> Register
+Guest --> Login
+
+User --> Profile
+User --> ViewProfile
+User --> UserFeed
+User --> Feed
+User --> Post
+User --> Workout
+User --> Food
+User --> Follow
+User --> Like
+User --> Comment
+
+TenantAdmin --> ConfigureTenant
+TenantAdmin --> ManageTenantProfile
+TenantAdmin --> TenantSettings
+
+ViewProfile .> UserFeed : includes
+Post .> Workout : extends
+Post .> Food : extends
+Feed .> Like : extends
+Feed .> Comment : extends
+Feed .> Follow : extends
+
+@enduml

@@ -1,0 +1,97 @@
+@startuml
+title Plate - User Account Creation Activity Diagram
+
+
+
+|User|
+:Open Plate app;
+:Select "Create Account";
+:Enter account details;
+note right
+Name
+Email
+Username
+Password
+end note
+
+:Choose account type;
+
+if (Create new tenant account?) then (Yes)
+
+  :Enter tenant details;
+  note right
+  Tenant name
+  Tenant slug
+  Plan type
+  end note
+
+else (No)
+
+  :Enter tenant invite code or tenant slug;
+
+endif
+
+:Submit registration form;
+
+|Frontend / PWA|
+:Validate form fields;
+
+if (Form data valid?) then (Yes)
+  :Send registration request to Auth / Tenant Service;
+else (No)
+  :Show validation errors;
+  stop
+endif
+
+|Auth / Tenant Service|
+:Receive registration request;
+:Validate request payload;
+:Check if email already exists;
+:Check if username already exists;
+
+if (Email or username exists?) then (Yes)
+  |Frontend / PWA|
+  :Show account already exists error;
+  stop
+else (No)
+endif
+
+|Auth / Tenant Service|
+:Hash user password;
+
+if (Creating new tenant?) then (Yes)
+
+  :Create tenant record;
+  :Create default tenant settings;
+  :Assign user role as TENANT_ADMIN;
+
+else (No)
+
+  :Validate tenant invite code or tenant slug;
+
+  if (Tenant access valid?) then (Yes)
+    :Assign user role as USER;
+  else (No)
+    |Frontend / PWA|
+    :Show invalid tenant access error;
+    stop
+  endif
+
+endif
+
+|Auth / Tenant Service|
+:Create user record;
+:Create user profile record;
+:Generate authentication token;
+
+|Frontend / PWA|
+:Store authentication token;
+:Redirect user to onboarding or dashboard;
+
+|User|
+:Account created successfully;
+:Begin using platform;
+
+stop
+
+@enduml

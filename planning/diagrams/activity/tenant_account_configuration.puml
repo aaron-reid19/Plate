@@ -1,0 +1,81 @@
+@startuml
+title RepFuel - Tenant Admin Configures Tenant Account Activity Diagram
+
+
+|Tenant Admin|
+:Open RepFuel app;
+:Log in;
+:Go to Tenant Settings page;
+
+|Frontend / PWA|
+:Request tenant settings;
+:Send request to Auth / Tenant Service;
+
+|Auth / Tenant Service|
+:Validate authentication token;
+:Check user role;
+
+if (User is TENANT_ADMIN?) then (Yes)
+  :Fetch tenant account;
+  :Fetch tenant settings;
+else (No)
+  |Frontend / PWA|
+  :Show unauthorized access error;
+  stop
+endif
+
+|Frontend / PWA|
+:Display tenant settings form;
+
+|Tenant Admin|
+:Update tenant account details;
+
+note right
+Tenant name
+Tenant slug
+Default post visibility
+Public discovery setting
+Comment settings
+Profile branding
+end note
+
+:Submit updated settings;
+
+|Frontend / PWA|
+:Validate form fields;
+
+if (Form data valid?) then (Yes)
+  :Send update request to Auth / Tenant Service;
+else (No)
+  :Show validation errors;
+  stop
+endif
+
+|Auth / Tenant Service|
+:Validate authentication token;
+:Confirm user is tenant admin;
+:Validate tenant ownership;
+:Check slug availability;
+
+if (Tenant update allowed?) then (Yes)
+  :Update tenant record;
+  :Update tenant settings record;
+else (No)
+  |Frontend / PWA|
+  :Show tenant update error;
+  stop
+endif
+
+|Auth / Tenant Service|
+:Return updated tenant settings;
+
+|Frontend / PWA|
+:Refresh tenant settings page;
+:Show success message;
+
+|Tenant Admin|
+:Tenant account configured successfully;
+
+stop
+
+@enduml

@@ -1,0 +1,205 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam rectangle<<AuthTenant>> {
+  BackgroundColor #D9EAD3
+}
+skinparam rectangle<<FitnessLogging>> {
+  BackgroundColor #DDEBF7
+}
+skinparam rectangle<<SocialFeed>> {
+  BackgroundColor #FCE5CD
+}
+
+title Plate Multi-Tenant Microservices ERD
+
+rectangle "Auth / Tenant Service" <<AuthTenant>> as AuthTenantService {
+
+  entity "tenants" as tenants {
+    * id : UUID <<PK>>
+    --
+    * name : VARCHAR
+    * slug : VARCHAR <<UNIQUE>>
+    * owner_user_id : UUID
+    * plan : VARCHAR
+    * created_at : TIMESTAMP
+  }
+
+  entity "tenant_settings" as tenant_settings {
+    * id : UUID <<PK>>
+    --
+    * tenant_id : UUID <<FK>>
+    * default_post_visibility : VARCHAR
+    * allow_public_discovery : BOOLEAN
+    * allow_comments : BOOLEAN
+    * updated_at : TIMESTAMP
+  }
+
+  entity "users" as users {
+    * id : UUID <<PK>>
+    --
+    * tenant_id : UUID <<FK>>
+    * username : VARCHAR <<UNIQUE>>
+    * email : VARCHAR <<UNIQUE>>
+    * password_hash : VARCHAR
+    * role : VARCHAR
+    * created_at : TIMESTAMP
+  }
+
+  entity "user_profiles" as user_profiles {
+    * id : UUID <<PK>>
+    --
+    * user_id : UUID <<FK>>
+    * display_name : VARCHAR
+    * bio : TEXT
+    * profile_image_url : VARCHAR
+    * fitness_goal : VARCHAR
+    * updated_at : TIMESTAMP
+  }
+}
+
+rectangle "Fitness Logging Service" <<FitnessLogging>> as FitnessLoggingService {
+
+  entity "workouts" as workouts {
+    * id : UUID <<PK>>
+    --
+    * tenant_id : UUID <<external ref>>
+    * user_id : UUID <<external ref>>
+    * post_id : UUID <<external ref>>
+    * title : VARCHAR
+    * workout_type : VARCHAR
+    * duration_minutes : INT
+    * notes : TEXT
+    * created_at : TIMESTAMP
+  }
+
+  entity "exercises" as exercises {
+    * id : UUID <<PK>>
+    --
+    * workout_id : UUID <<FK>>
+    * name : VARCHAR
+    * muscle_group : VARCHAR
+    * notes : TEXT
+  }
+
+  entity "workout_sets" as workout_sets {
+    * id : UUID <<PK>>
+    --
+    * exercise_id : UUID <<FK>>
+    * set_number : INT
+    * reps : INT
+    * weight : DECIMAL
+    * rest_seconds : INT
+  }
+
+  entity "food_logs" as food_logs {
+    * id : UUID <<PK>>
+    --
+    * tenant_id : UUID <<external ref>>
+    * user_id : UUID <<external ref>>
+    * post_id : UUID <<external ref>>
+    * meal_type : VARCHAR
+    * title : VARCHAR
+    * calories : INT
+    * protein : DECIMAL
+    * carbs : DECIMAL
+    * fat : DECIMAL
+    * notes : TEXT
+    * created_at : TIMESTAMP
+  }
+
+  entity "food_items" as food_items {
+    * id : UUID <<PK>>
+    --
+    * food_log_id : UUID <<FK>>
+    * name : VARCHAR
+    * calories : INT
+    * protein : DECIMAL
+    * carbs : DECIMAL
+    * fat : DECIMAL
+    * quantity : DECIMAL
+    * unit : VARCHAR
+  }
+}
+
+rectangle "Social Feed Service" <<SocialFeed>> as SocialFeedService {
+
+  entity "posts" as posts {
+    * id : UUID <<PK>>
+    --
+    * tenant_id : UUID <<external ref>>
+    * user_id : UUID <<external ref>>
+    * post_type : VARCHAR
+    * caption : TEXT
+    * media_url : VARCHAR
+    * visibility : VARCHAR
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+  }
+
+  entity "comments" as comments {
+    * id : UUID <<PK>>
+    --
+    * post_id : UUID <<FK>>
+    * user_id : UUID <<external ref>>
+    * body : TEXT
+    * created_at : TIMESTAMP
+    * updated_at : TIMESTAMP
+  }
+
+  entity "likes" as likes {
+    * id : UUID <<PK>>
+    --
+    * post_id : UUID <<FK>>
+    * user_id : UUID <<external ref>>
+    * created_at : TIMESTAMP
+  }
+
+  entity "follows" as follows {
+    * id : UUID <<PK>>
+    --
+    * follower_user_id : UUID <<external ref>>
+    * following_user_id : UUID <<external ref>>
+    * created_at : TIMESTAMP
+  }
+}
+
+' ======================
+' Internal relationships
+' ======================
+
+tenants ||--|| tenant_settings : has
+tenants ||--o{ users : contains
+users ||--|| user_profiles : has
+
+workouts ||--o{ exercises : contains
+exercises ||--o{ workout_sets : contains
+
+food_logs ||--o{ food_items : contains
+
+posts ||--o{ comments : has
+posts ||--o{ likes : has
+
+' ======================
+' Cross-service references
+' Logical only, not hard DB joins
+' ======================
+
+tenants ||..o{ posts : tenant_id
+tenants ||..o{ workouts : tenant_id
+tenants ||..o{ food_logs : tenant_id
+
+users ||..o{ posts : user_id
+users ||..o{ workouts : user_id
+users ||..o{ food_logs : user_id
+users ||..o{ comments : user_id
+users ||..o{ likes : user_id
+
+users ||..o{ follows : follower_user_id
+users ||..o{ follows : following_user_id
+
+posts ||..o| workouts : post_id
+posts ||..o| food_logs : post_id
+
+@enduml

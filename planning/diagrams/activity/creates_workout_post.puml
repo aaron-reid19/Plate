@@ -1,0 +1,91 @@
+@startuml
+title Plate - User Creates Workout Post Activity Diagram
+
+
+
+|User|
+:Open Plate app;
+:Select "Create Workout Post";
+:Enter workout details;
+
+note right
+Workout title
+Workout type
+Duration
+Exercises
+Sets
+Reps
+Weight
+Notes
+Caption
+Visibility
+end note
+
+:Submit workout post;
+
+|Frontend / PWA|
+:Validate workout form;
+
+if (Form data valid?) then (Yes)
+  :Send workout data to Fitness Logging Service;
+else (No)
+  :Show validation errors;
+  stop
+endif
+
+|Fitness Logging Service|
+:Receive workout request;
+:Validate workout payload;
+:Validate user_id and tenant_id references;
+
+if (User and tenant references valid?) then (Yes)
+  :Create workout record;
+  :Create exercise records;
+  :Create workout set records;
+else (No)
+  |Frontend / PWA|
+  :Show invalid user or tenant error;
+  stop
+endif
+
+|Fitness Logging Service|
+:Return workout_id to Frontend;
+
+|Frontend / PWA|
+:Send post creation request to Social Feed Service;
+
+note right
+Includes:
+workout_id
+user_id
+tenant_id
+caption
+visibility
+post_type = WORKOUT
+end note
+
+|Social Feed Service|
+:Receive post creation request;
+:Validate post payload;
+:Create post record;
+:Attach workout reference to post;
+
+if (Post visibility is public or followers only?) then (Yes)
+  :Make post available in feed;
+else (Private)
+  :Save post to user's private profile feed only;
+endif
+
+|Social Feed Service|
+:Return created post;
+
+|Frontend / PWA|
+:Show success message;
+:Redirect user to created workout post;
+
+|User|
+:Views workout post on profile feed;
+
+stop
+
+@enduml
