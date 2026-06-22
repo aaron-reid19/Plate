@@ -1,0 +1,94 @@
+@startuml
+title Plate - Multi-Tenant Social Fitness PWA Architecture
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam nodesep 80
+skinparam ranksep 90
+skinparam Padding 8
+
+actor "User" as User
+
+cloud "Cloudflare Edge" as Cloudflare {
+  together {
+    node "plate.example.com" as FrontendHost {
+      component "Next.js + TypeScript PWA" as Frontend
+    }
+
+    node "api.plate.example.com" as GatewayHost {
+      component "API Gateway Worker" as Gateway
+    }
+  }
+
+  together {
+    node "auth-api.plate.example.com" as AuthHost {
+      component "Auth / Tenant Service\nCloudflare Worker" as AuthService
+    }
+
+    node "fitness-api.plate.example.com" as FitnessHost {
+      component "Fitness Logging Service\nCloudflare Worker" as FitnessService
+    }
+
+    node "social-api.plate.example.com" as SocialHost {
+      component "Social Feed Service\nCloudflare Worker" as SocialService
+    }
+  }
+}
+
+together {
+  database "Supabase Auth DB\nPostgreSQL" as AuthDB
+  database "Supabase Fitness DB\nPostgreSQL" as FitnessDB
+  database "Supabase Social DB\nPostgreSQL" as SocialDB
+}
+
+storage "Supabase Storage\nMedia Files" as MediaStorage
+
+User --> Frontend : Uses app
+
+Frontend --> Gateway : HTTPS API requests
+
+Gateway --> AuthService : /auth/*
+Gateway --> FitnessService : /fitness/*
+Gateway --> SocialService : /social/*
+
+AuthService --> AuthDB : users\ntenants\nprofiles\nsettings
+
+FitnessService --> FitnessDB : workouts\nexercises\nsets\nfood logs\nfood items
+
+SocialService --> SocialDB : posts\nlikes\ncomments\nfollows
+
+Frontend --> MediaStorage : Uploads and views media
+SocialService --> MediaStorage : Store media URLs
+
+AuthService ..> FitnessService : Validate user and tenant refs
+AuthService ..> SocialService : Validate user and tenant refs
+SocialService ..> FitnessService : Get workout and food summaries
+
+note right of Frontend
+PWA Features:
+- Installable web app
+- Mobile-first UI
+- App manifest
+- Service worker support
+end note
+
+note bottom of Gateway
+Frontend only calls the API Gateway.
+The gateway routes requests to the correct service.
+end note
+
+note bottom of AuthService
+Each service is separately deployed
+as a Cloudflare Worker.
+end note
+
+note bottom of AuthDB
+Each service owns its own database.
+No service directly queries another
+service's database.
+end note
+
+@enduml
