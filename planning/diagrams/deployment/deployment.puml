@@ -1,0 +1,125 @@
+@startuml
+title Plate - Deployment Diagram
+
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam shadowing false
+
+actor "User" as User
+node "User Device" as Device {
+  artifact "Installed PWA / Browser" as PWA
+}
+
+node "Developer Machine" as Dev {
+  artifact "Next.js Source Code" as FrontendCode
+  artifact "Cloudflare Worker Services" as WorkerCode
+  artifact "Database Migration Files" as Migrations
+}
+
+cloud "GitHub" as GitHub {
+  node "plate Repository" as Repo
+  node "GitHub Actions" as Actions
+}
+
+cloud "Cloudflare" as Cloudflare {
+
+  node "Cloudflare DNS + HTTPS" as DNS {
+    artifact "plate.example.com" as FrontendDomain
+    artifact "api.plate.example.com" as GatewayDomain
+    artifact "auth-api.plate.example.com" as AuthDomain
+    artifact "fitness-api.plate.example.com" as FitnessDomain
+    artifact "social-api.plate.example.com" as SocialDomain
+  }
+
+  node "Frontend Hosting" as FrontendHost {
+    artifact "Next.js + TypeScript PWA" as FrontendApp
+  }
+
+  node "API Gateway Worker" as GatewayHost {
+    artifact "Gateway Worker" as Gateway
+  }
+
+  node "Auth / Tenant Worker" as AuthHost {
+    artifact "Auth / Tenant Service" as AuthService
+  }
+
+  node "Fitness Logging Worker" as FitnessHost {
+    artifact "Fitness Logging Service" as FitnessService
+  }
+
+  node "Social Feed Worker" as SocialHost {
+    artifact "Social Feed Service" as SocialService
+  }
+}
+
+cloud "Supabase" as Supabase {
+
+  database "Auth PostgreSQL DB" as AuthDB {
+    artifact "tenants"
+    artifact "tenant_settings"
+    artifact "users"
+    artifact "user_profiles"
+  }
+
+  database "Fitness PostgreSQL DB" as FitnessDB {
+    artifact "workouts"
+    artifact "exercises"
+    artifact "workout_sets"
+    artifact "food_logs"
+    artifact "food_items"
+  }
+
+  database "Social PostgreSQL DB" as SocialDB {
+    artifact "posts"
+    artifact "comments"
+    artifact "likes"
+    artifact "follows"
+  }
+
+  storage "Supabase Storage" as Storage {
+    artifact "Profile Images"
+    artifact "Post Media"
+    artifact "Workout/Food Media"
+  }
+}
+
+Dev --> Repo : Push code
+Repo --> Actions : Trigger CI/CD
+
+Actions --> FrontendHost : Deploy frontend
+Actions --> GatewayHost : Deploy API Gateway Worker
+Actions --> AuthHost : Deploy Auth Worker
+Actions --> FitnessHost : Deploy Fitness Worker
+Actions --> SocialHost : Deploy Social Worker
+Actions --> Supabase : Run database migrations
+
+User --> Device : Opens app
+PWA --> FrontendDomain : Load PWA
+FrontendDomain --> FrontendApp : Serve frontend
+
+PWA --> GatewayDomain : API requests
+GatewayDomain --> Gateway : Route request
+
+Gateway --> AuthService : /auth/*
+Gateway --> FitnessService : /fitness/*
+Gateway --> SocialService : /social/*
+
+AuthService --> AuthDB : Read/write auth and tenant data
+FitnessService --> FitnessDB : Read/write workout and food data
+SocialService --> SocialDB : Read/write posts and social data
+
+PWA --> Storage : Upload/view media
+SocialService --> Storage : Store media URLs
+
+note bottom of Cloudflare
+No Nginx or Docker required.
+Services are deployed as Cloudflare Workers.
+end note
+
+note bottom of Supabase
+Each microservice owns its own Supabase PostgreSQL database.
+Services communicate through APIs, not direct database access.
+end note
+
+@enduml
