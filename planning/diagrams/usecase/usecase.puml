@@ -35,41 +35,20 @@ rectangle "Plate Multi-Tenant Platform" {
     usecase "View Platform Feed" as Feed
   }
 
-  package "Content and Engagement" {
-    usecase "Create Post" as Post
+  package "Workout Logging Service" {
     usecase "Create Workout" as Workout
+  }
+
+  package "Nutrition Logging Service" {
     usecase "Log Food" as Food
+  }
+
+  package "Social Feed Service" {
+    usecase "Create Post" as Post
     usecase "Follow User" as Follow
     usecase "Like Post" as Like
     usecase "Comment on Post" as Comment
   }
-}
-
-together {
-  Register
-  Login
-}
-
-together {
-  ConfigureTenant
-  ManageTenantProfile
-  TenantSettings
-}
-
-together {
-  Profile
-  ViewProfile
-  UserFeed
-  Feed
-}
-
-together {
-  Post
-  Workout
-  Food
-  Follow
-  Like
-  Comment
 }
 
 Guest --> Register
@@ -90,11 +69,11 @@ TenantAdmin --> ConfigureTenant
 TenantAdmin --> ManageTenantProfile
 TenantAdmin --> TenantSettings
 
-ViewProfile .> UserFeed : includes
-Post .> Workout : extends
-Post .> Food : extends
-Feed .> Like : extends
-Feed .> Comment : extends
-Feed .> Follow : extends
+ViewProfile ..> UserFeed : <<include>>
+Workout ..> Post : <<extend>>
+Food ..> Post : <<extend>>
+Like ..> Feed : <<extend>>
+Comment ..> Feed : <<extend>>
+Follow ..> Feed : <<extend>>
 
 @enduml

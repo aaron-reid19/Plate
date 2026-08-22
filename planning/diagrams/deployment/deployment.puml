@@ -1,125 +1,368 @@
 @startuml
-title Plate - Deployment Diagram
+title Plate - Kubernetes / K3s Deployment Diagram
 
+left to right direction
+skinparam backgroundColor #F6F1E8
+skinparam defaultFontName Helvetica
+skinparam dpi 160
+skinparam roundCorner 18
+skinparam shadowing true
+skinparam ArrowColor #5B5B66
+skinparam ArrowThickness 1.2
 skinparam packageStyle rectangle
 skinparam componentStyle rectangle
 skinparam linetype ortho
-skinparam shadowing false
-
-actor "User" as User
-node "User Device" as Device {
-  artifact "Installed PWA / Browser" as PWA
+skinparam nodesep 100
+skinparam ranksep 140
+skinparam Padding 12
+skinparam wrapWidth 220
+skinparam maxMessageSize 180
+skinparam TitleFontSize 22
+skinparam TitleFontColor #1F2937
+skinparam TitleBorderColor #D6C7AE
+skinparam TitleBackgroundColor #F3E6CF
+skinparam actor {
+  FontColor #1F2937
+}
+skinparam node {
+  BackgroundColor #E8DDC9
+  BorderColor #8E7A5B
+  FontColor #2A2A33
+}
+skinparam cloud {
+  BackgroundColor #E7EEF8
+  BorderColor #6B88A8
+  FontColor #1F3347
+}
+skinparam artifact {
+  BackgroundColor #FFF8EE
+  BorderColor #9A815B
+  FontColor #2A2A33
+}
+skinparam artifact<<Domain>> {
+  BackgroundColor #D9F0E4
+  BorderColor #4C8B6F
+}
+skinparam artifact<<Workout>> {
+  BackgroundColor #DCEBFA
+  BorderColor #4E79A7
+}
+skinparam artifact<<Nutrition>> {
+  BackgroundColor #F5DDF2
+  BorderColor #9B5E9A
+}
+skinparam artifact<<Social>> {
+  BackgroundColor #FCE2CF
+  BorderColor #C26A3D
+}
+skinparam artifact<<Edge>> {
+  BackgroundColor #FDE7C8
+  BorderColor #D28B26
+}
+skinparam database {
+  BackgroundColor #FFFDF8
+  BorderColor #8E7A5B
+  FontColor #2A2A33
+}
+skinparam storage {
+  BackgroundColor #FFF3D6
+  BorderColor #C89B3C
+  FontColor #3A2D12
+}
+skinparam queue {
+  BackgroundColor #FBE7B7
+  BorderColor #BC8A14
+  FontColor #3A2D12
+}
+skinparam note {
+  BackgroundColor #FFF5DB
+  BorderColor #D0A85C
+  FontColor #3B3121
 }
 
-node "Developer Machine" as Dev {
-  artifact "Next.js Source Code" as FrontendCode
-  artifact "Cloudflare Worker Services" as WorkerCode
-  artifact "Database Migration Files" as Migrations
+actor "Developer" as developer
+
+node "Developer Environment" as dev {
+  artifact "VS Code" as vscode
+  artifact "Local Git repository" as localGit
+  artifact "Docker\nbuild + local image tests" as docker
+  artifact "Kubernetes manifests /\nHelm charts" as manifests
+  artifact "Argo CD configuration\n(optional GitOps)" as argoConfig
+  note right of docker
+  Docker is the image format and
+  local development tool.
+  Docker Compose, if used, is local only.
+  end note
 }
 
-cloud "GitHub" as GitHub {
-  node "plate Repository" as Repo
-  node "GitHub Actions" as Actions
+cloud "GitHub" as github {
+  artifact "Plate repository" as repo
+  artifact "GitHub Actions\ntests + image build" as actions
+  artifact "GitHub Container Registry\nversioned Plate images" as ghcr
 }
 
-cloud "Cloudflare" as Cloudflare {
+developer --> vscode : edits
+vscode --> localGit : commit
+localGit --> docker : build / test locally
+localGit --> repo : push code
+repo --> actions : trigger CI
+actions --> ghcr : push Docker image
+actions --> repo : update image tag in\nmanifests / Helm values
+repo --> argoConfig : desired state is versioned
 
-  node "Cloudflare DNS + HTTPS" as DNS {
-    artifact "plate.example.com" as FrontendDomain
-    artifact "api.plate.example.com" as GatewayDomain
-    artifact "auth-api.plate.example.com" as AuthDomain
-    artifact "fitness-api.plate.example.com" as FitnessDomain
-    artifact "social-api.plate.example.com" as SocialDomain
-  }
+cloud "Public Infrastructure" as public {
+  artifact "Plate domain\nplate.aareid.ca" as plateDomain <<Edge>>
+  artifact "Cloudflare DNS" as dns <<Edge>>
+  artifact "Cloudflare TLS" as tls <<Edge>>
+  artifact "Cloudflare proxy or tunnel" as cfProxy <<Edge>>
+  artifact "API routing\n/ -> frontend\n/api/* -> services" as apiRouting <<Edge>>
+}
 
-  node "Frontend Hosting" as FrontendHost {
-    artifact "Next.js + TypeScript PWA" as FrontendApp
-  }
+actor "User" as user
+node "User Device" as device {
+  artifact "Browser" as browser <<Edge>>
+  artifact "Installed Plate PWA" as pwa <<Edge>>
+}
 
-  node "API Gateway Worker" as GatewayHost {
-    artifact "Gateway Worker" as Gateway
-  }
+user --> browser : opens app
+user --> pwa : launches app
+browser --> plateDomain : HTTPS
+pwa --> plateDomain : HTTPS
+plateDomain --> dns : resolve
+dns --> tls : TLS policy
+tls --> cfProxy : proxy / tunnel
+cfProxy --> apiRouting : route by host / path
 
-  node "Auth / Tenant Worker" as AuthHost {
-    artifact "Auth / Tenant Service" as AuthService
-  }
+node "Ubuntu Home Server\nCurrent: one K3s server node" as home {
+  node "K3s cluster" as k3s {
+    node "Kubernetes control plane" as controlPlane
+    node "Kubernetes node\ncontainerd runtime" as workerNode {
+      package "Namespace: plate-app" as plateApp {
+        artifact "Kubernetes Ingress\npublic application entrypoint" as ingress <<Edge>>
 
-  node "Fitness Logging Worker" as FitnessHost {
-    artifact "Fitness Logging Service" as FitnessService
-  }
+        node "Nginx Ingress Controller\nDeployment" as nginxDeployment <<Edge>> {
+          artifact "Nginx controller Pod(s)" as nginxPods <<Edge>>
+        }
 
-  node "Social Feed Worker" as SocialHost {
-    artifact "Social Feed Service" as SocialService
+        node "Next.js PWA\nDeployment" as nextDeployment {
+          artifact "Next.js Pod(s)" as nextPods <<Edge>>
+        }
+        artifact "nextjs-svc\nClusterIP Service" as nextService <<Edge>>
+
+        node "Identity and Tenant\nDeployment" as identityDeployment <<Domain>> {
+          artifact "Identity/Tenant Pod(s)" as identityPods <<Domain>>
+        }
+        artifact "identity-svc\nClusterIP Service" as identityService <<Domain>>
+
+        node "Workout\nDeployment" as workoutDeployment <<Workout>> {
+          artifact "Workout Pod(s)\nreplicas: 1 now; scalable" as workoutPods <<Workout>>
+        }
+        artifact "workout-svc\nClusterIP Service" as workoutService <<Workout>>
+
+        node "Nutrition\nDeployment" as nutritionDeployment <<Nutrition>> {
+          artifact "Nutrition Pod(s)\nreplicas: 1 now; scalable" as nutritionPods <<Nutrition>>
+        }
+        artifact "nutrition-svc\nClusterIP Service" as nutritionService <<Nutrition>>
+
+        node "Social\nDeployment" as socialDeployment <<Social>> {
+          artifact "Social Pod(s)\nreplicas: 1 now; scalable" as socialPods <<Social>>
+        }
+        artifact "social-svc\nClusterIP Service" as socialService <<Social>>
+
+        node "Analytics\nDeployment" as analyticsDeployment {
+          artifact "Analytics Pod(s)\nreplicas: 1 now; scalable" as analyticsPods
+        }
+        artifact "analytics-svc\nClusterIP Service" as analyticsService
+
+        node "Notification\nDeployment" as notificationDeployment {
+          artifact "Notification Pod(s)\nreplicas: 1 now; scalable" as notificationPods
+        }
+        artifact "notification-svc\nClusterIP Service" as notificationService
+
+        artifact "ConfigMaps\nservice URLs, topics, flags, logging" as appConfig
+        artifact "Secrets\npasswords, auth secrets, API keys" as appSecrets
+      }
+
+      package "Namespace: plate-data" as plateData {
+        artifact "StorageClass\nlocal-path" as storageClass
+        storage "PersistentVolumes\nnode-backed K3s storage" as dataPVs
+        storage "PVCs\nDB and backup claims" as dataPVCs
+
+        node "Database migration\nJob per release" as migrationJob
+
+        node "Auth PostgreSQL\nStatefulSet" as authPostgres {
+          database "service-owned auth DB\nusers, tenants, profiles\noutbox_events" as authDb
+        }
+        artifact "auth-db-svc\nClusterIP Service" as authDbService
+
+        node "Workout PostgreSQL\nStatefulSet" as workoutPostgres {
+          database "service-owned workout DB\nworkouts, exercises, sets\noutbox_events" as workoutDb
+        }
+        artifact "workout-db-svc\nClusterIP Service" as workoutDbService
+
+        node "Nutrition PostgreSQL\nStatefulSet" as nutritionPostgres {
+          database "service-owned nutrition DB\nfood logs, food items\noutbox_events" as nutritionDb
+        }
+        artifact "nutrition-db-svc\nClusterIP Service" as nutritionDbService
+
+        node "Social PostgreSQL\nStatefulSet" as socialPostgres {
+          database "service-owned social DB\nposts, comments, likes, follows\noutbox_events" as socialDb
+        }
+        artifact "social-db-svc\nClusterIP Service" as socialDbService
+
+        node "Database backup\nCronJob" as backupJob
+        storage "Backup PVC\nseparate persistent claim" as backupPVC
+      }
+
+      package "Namespace: plate-events" as plateEvents {
+        node "Kafka\nStatefulSet" as kafkaStatefulSet {
+          queue "Kafka broker\nstable identity + disk" as kafkaBroker
+        }
+        artifact "kafka-svc\nClusterIP Service" as kafkaService
+        artifact "Kafka topics\ndomain events + consumer groups" as eventTopics
+        queue "Retry topics" as retryTopics
+        queue "Dead-letter topics" as deadLetterTopics
+
+        node "Kafka Connect\nDeployment" as connectDeployment {
+          artifact "Kafka Connect Pod(s)" as connectPods
+        }
+        artifact "connect-svc\nClusterIP Service" as connectService
+        artifact "Debezium outbox connectors\nCDC configuration" as debeziumConnectors
+        artifact "ConfigMaps\nconnector and topic config" as eventConfig
+        artifact "Secrets\nKafka credentials" as eventSecrets
+        storage "Kafka PVC\npersistent broker log storage" as kafkaPVC
+      }
+
+      package "Namespace: plate-observability" as observability {
+        artifact "Argo CD\noptional Deployment" as argoCd
+        node "Monitoring and logging\nDeployments" as monitoring
+        artifact "Metrics, logs, alerts" as telemetry
+      }
+    }
   }
 }
 
-cloud "Supabase" as Supabase {
+artifact "Home network / router\n443 or tunnel endpoint" as homeNetwork
+cfProxy --> homeNetwork : HTTPS / tunnel
+homeNetwork --> ingress : forwards to Ingress
+ingress --> nginxDeployment : handled by controller
+nginxDeployment --> nextService : /
+nginxDeployment --> identityService : /api/identity/*
+nginxDeployment --> workoutService : /api/workouts/*
+nginxDeployment --> nutritionService : /api/nutrition/*
+nginxDeployment --> socialService : /api/social/*
+nginxDeployment --> analyticsService : /api/analytics/*
 
-  database "Auth PostgreSQL DB" as AuthDB {
-    artifact "tenants"
-    artifact "tenant_settings"
-    artifact "users"
-    artifact "user_profiles"
-  }
+nextService --> nextPods : selects Pods
+identityService --> identityPods : selects Pods
+workoutService --> workoutPods : selects Pods
+nutritionService --> nutritionPods : selects Pods
+socialService --> socialPods : selects Pods
+analyticsService --> analyticsPods : selects Pods
+notificationService --> notificationPods : selects Pods
 
-  database "Fitness PostgreSQL DB" as FitnessDB {
-    artifact "workouts"
-    artifact "exercises"
-    artifact "workout_sets"
-    artifact "food_logs"
-    artifact "food_items"
-  }
+appConfig ..> nextDeployment : injects config
+appConfig ..> identityDeployment : injects config
+appConfig ..> workoutDeployment : injects config
+appConfig ..> nutritionDeployment : injects config
+appConfig ..> socialDeployment : injects config
+appConfig ..> analyticsDeployment : injects config
+appConfig ..> notificationDeployment : injects config
+appSecrets ..> identityDeployment : injects secrets
+appSecrets ..> workoutDeployment : injects secrets
+appSecrets ..> nutritionDeployment : injects secrets
+appSecrets ..> socialDeployment : injects secrets
 
-  database "Social PostgreSQL DB" as SocialDB {
-    artifact "posts"
-    artifact "comments"
-    artifact "likes"
-    artifact "follows"
-  }
+identityPods --> authDbService : internal PostgreSQL
+workoutPods --> workoutDbService : internal PostgreSQL
+nutritionPods --> nutritionDbService : internal PostgreSQL
+socialPods --> socialDbService : internal PostgreSQL
+authDbService --> authDb : selects DB
+workoutDbService --> workoutDb : selects DB
+nutritionDbService --> nutritionDb : selects DB
+socialDbService --> socialDb : selects DB
 
-  storage "Supabase Storage" as Storage {
-    artifact "Profile Images"
-    artifact "Post Media"
-    artifact "Workout/Food Media"
-  }
-}
+authPostgres --> dataPVCs : mounts claim
+workoutPostgres --> dataPVCs : mounts claim
+nutritionPostgres --> dataPVCs : mounts claim
+socialPostgres --> dataPVCs : mounts claim
+storageClass --> dataPVCs : provisions
+dataPVCs --> dataPVs : binds
+backupJob --> backupPVC : writes backup
+backupPVC --> dataPVs : persistent storage
+migrationJob --> authDbService : migrate once per release
+migrationJob --> workoutDbService : migrate once per release
+migrationJob --> nutritionDbService : migrate once per release
+migrationJob --> socialDbService : migrate once per release
 
-Dev --> Repo : Push code
-Repo --> Actions : Trigger CI/CD
+authDb --> debeziumConnectors : outbox CDC
+workoutDb --> debeziumConnectors : outbox CDC
+nutritionDb --> debeziumConnectors : outbox CDC
+socialDb --> debeziumConnectors : outbox CDC
+debeziumConnectors --> connectDeployment : runs in Connect
+connectService --> connectPods : selects Pods
+connectDeployment --> kafkaService : publishes events
+kafkaService --> kafkaBroker : broker access
+kafkaBroker --> eventTopics : domain topics
+kafkaBroker --> retryTopics : retry topics
+kafkaBroker --> deadLetterTopics : dead-letter topics
+kafkaStatefulSet --> kafkaPVC : mounts claim
+socialPods --> kafkaService : consume events only
+analyticsPods --> kafkaService : consume events only
+notificationPods --> kafkaService : consume events only
+retryTopics --> analyticsPods : retry delivery
+deadLetterTopics --> notificationPods : inspect / replay
 
-Actions --> FrontendHost : Deploy frontend
-Actions --> GatewayHost : Deploy API Gateway Worker
-Actions --> AuthHost : Deploy Auth Worker
-Actions --> FitnessHost : Deploy Fitness Worker
-Actions --> SocialHost : Deploy Social Worker
-Actions --> Supabase : Run database migrations
+manifests --> repo : source-controlled desired state
+argoConfig --> repo : optional GitOps config
+repo --> argoCd : detects desired-state change
+argoCd --> controlPlane : synchronizes manifests
+ghcr --> workerNode : K3s pulls image
+controlPlane --> nginxDeployment : rolling deployment
+controlPlane --> nextDeployment : rolling deployment
+controlPlane --> identityDeployment : rolling deployment
+controlPlane --> workoutDeployment : rolling deployment
+controlPlane --> nutritionDeployment : rolling deployment
+controlPlane --> socialDeployment : rolling deployment
+controlPlane --> analyticsDeployment : rolling deployment
+controlPlane --> notificationDeployment : rolling deployment
 
-User --> Device : Opens app
-PWA --> FrontendDomain : Load PWA
-FrontendDomain --> FrontendApp : Serve frontend
+artifact "SSH / Tailscale access" as adminAccess
+artifact "kubectl" as kubectl
+artifact "Optional Kubernetes dashboard" as dashboard
+adminAccess --> controlPlane : administration only
+kubectl --> controlPlane : cluster management
+dashboard --> controlPlane : internal administration
+monitoring --> telemetry : collects metrics and logs
+controlPlane --> monitoring : observes cluster
 
-PWA --> GatewayDomain : API requests
-GatewayDomain --> Gateway : Route request
+cloud "External backup storage\noff-host / optional" as externalBackup
+backupJob --> externalBackup : encrypted backup copy
 
-Gateway --> AuthService : /auth/*
-Gateway --> FitnessService : /fitness/*
-Gateway --> SocialService : /social/*
+note bottom of home
+Only the Kubernetes Ingress is publicly reachable for application traffic.
+ClusterIP Services, Pods, databases, Kafka, Kafka Connect, Debezium,
+and administration interfaces remain internal to the cluster.
 
-AuthService --> AuthDB : Read/write auth and tenant data
-FitnessService --> FitnessDB : Read/write workout and food data
-SocialService --> SocialDB : Read/write posts and social data
-
-PWA --> Storage : Upload/view media
-SocialService --> Storage : Store media URLs
-
-note bottom of Cloudflare
-No Nginx or Docker required.
-Services are deployed as Cloudflare Workers.
+Current deployment: one K3s server/control-plane node with one replica for most services.
+Future deployment: add worker nodes and replicas; this diagram does not claim
+PostgreSQL or Kafka high availability on the current single-node setup.
 end note
 
-note bottom of Supabase
-Each microservice owns its own Supabase PostgreSQL database.
-Services communicate through APIs, not direct database access.
+note bottom of github
+Deployment flow:
+Developer pushes code -> Actions runs tests -> Actions builds image -> image is pushed to GHCR
+-> manifests / Helm values are updated -> Argo CD synchronizes K3s -> K3s pulls the image
+-> Kubernetes performs a rolling Deployment.
+
+GitHub Actions does not SSH directly into the server in the GitOps path.
+end note
+
+note bottom of plateData
+Ephemeral container storage is not used for databases or Kafka.
+PVCs bind to persistent volumes through the StorageClass.
+Backups are separate from live database and broker storage.
+Service databases are independently owned; no cross-service database foreign keys.
 end note
 
 @enduml

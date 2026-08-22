@@ -1,94 +1,287 @@
 @startuml
-title Plate - Multi-Tenant Social Fitness PWA Architecture
+title Plate - Kubernetes Application Architecture
 
 left to right direction
+skinparam backgroundColor #F6F1E8
+skinparam defaultFontName Helvetica
+skinparam dpi 160
+skinparam roundCorner 18
+skinparam shadowing true
+skinparam ArrowColor #5B5B66
+skinparam ArrowThickness 1.3
 skinparam packageStyle rectangle
-skinparam linetype ortho
-skinparam shadowing false
 skinparam componentStyle rectangle
-skinparam nodesep 80
-skinparam ranksep 90
-skinparam Padding 8
+skinparam linetype ortho
+skinparam nodesep 100
+skinparam ranksep 140
+skinparam Padding 12
+skinparam wrapWidth 220
+skinparam maxMessageSize 180
+skinparam TitleFontSize 22
+skinparam TitleFontColor #1F2937
+skinparam TitleBorderColor #D6C7AE
+skinparam TitleBackgroundColor #F3E6CF
+skinparam node {
+  BackgroundColor #E8DDC9
+  BorderColor #8E7A5B
+  FontColor #2A2A33
+}
+skinparam cloud {
+  BackgroundColor #E7EEF8
+  BorderColor #6B88A8
+  FontColor #1F3347
+}
+skinparam package {
+  BackgroundColor #F9F4EA
+  BorderColor #B79F7A
+  FontColor #2A2A33
+}
+skinparam component {
+  BackgroundColor #FFF8EE
+  BorderColor #9A815B
+  FontColor #2A2A33
+}
+skinparam component<<Edge>> {
+  BackgroundColor #FDE7C8
+  BorderColor #D28B26
+}
+skinparam component<<Auth>> {
+  BackgroundColor #D9F0E4
+  BorderColor #4C8B6F
+}
+skinparam component<<Workout>> {
+  BackgroundColor #DCEBFA
+  BorderColor #4E79A7
+}
+skinparam component<<Nutrition>> {
+  BackgroundColor #F5DDF2
+  BorderColor #9B5E9A
+}
+skinparam component<<Social>> {
+  BackgroundColor #FCE2CF
+  BorderColor #C26A3D
+}
+skinparam component<<Passive>> {
+  BackgroundColor #ECE7F6
+  BorderColor #7561A8
+}
+skinparam database {
+  BackgroundColor #FFFDF8
+  BorderColor #8E7A5B
+  FontColor #2A2A33
+}
+skinparam database<<Auth>> {
+  BackgroundColor #E9F7EF
+  BorderColor #4C8B6F
+}
+skinparam database<<Workout>> {
+  BackgroundColor #EAF3FD
+  BorderColor #4E79A7
+}
+skinparam database<<Nutrition>> {
+  BackgroundColor #FBEAF9
+  BorderColor #9B5E9A
+}
+skinparam database<<Social>> {
+  BackgroundColor #FEF0E5
+  BorderColor #C26A3D
+}
+skinparam queue {
+  BackgroundColor #FBE7B7
+  BorderColor #BC8A14
+  FontColor #3A2D12
+}
+skinparam storage {
+  BackgroundColor #FFF3D6
+  BorderColor #C89B3C
+  FontColor #3A2D12
+}
+skinparam artifact {
+  BackgroundColor #FFF8EE
+  BorderColor #9A815B
+  FontColor #2A2A33
+}
+skinparam note {
+  BackgroundColor #FFF5DB
+  BorderColor #D0A85C
+  FontColor #3B3121
+}
 
-actor "User" as User
+actor "User" as user
 
-cloud "Cloudflare Edge" as Cloudflare {
-  together {
-    node "plate.example.com" as FrontendHost {
-      component "Next.js + TypeScript PWA" as Frontend
-    }
+cloud "Public Edge" as edge {
+  component "Browser / Installed Plate PWA" as pwa <<Edge>>
+  component "Cloudflare DNS + TLS\nproxy / tunnel" as cloudflare <<Edge>>
+}
 
-    node "api.plate.example.com" as GatewayHost {
-      component "API Gateway Worker" as Gateway
-    }
+node "Kubernetes Cluster\nK3s current single-node; expandable to workers" as cluster {
+  component "Kubernetes Ingress\npublic entry point" as ingress <<Edge>>
+  component "Nginx Ingress Controller\nhandles Ingress resources" as nginx <<Edge>>
+
+  package "Namespace: plate-app" as app {
+    component "nextjs-svc\nClusterIP Service" as nextSvc <<Edge>>
+    component "Next.js Frontend\nDeployment Pods" as nextPods <<Edge>>
+
+    component "identity-svc\nClusterIP Service" as identitySvc <<Auth>>
+    component "Identity and Tenant API\nDeployment Pods" as identityPods <<Auth>>
+
+    component "workout-svc\nClusterIP Service" as workoutSvc <<Workout>>
+    component "Workout API\nDeployment Pods" as workoutPods <<Workout>>
+
+    component "nutrition-svc\nClusterIP Service" as nutritionSvc <<Nutrition>>
+    component "Nutrition API\nDeployment Pods" as nutritionPods <<Nutrition>>
+
+    component "social-svc\nClusterIP Service" as socialSvc <<Social>>
+    component "Social API + consumer\nDeployment Pods" as socialPods <<Social>>
+
+    component "analytics-svc\nClusterIP Service" as analyticsSvc <<Passive>>
+    component "Analytics API + consumer\nDeployment Pods" as analyticsPods <<Passive>>
+
+    component "notification-svc\nClusterIP Service" as notificationSvc <<Passive>>
+    component "Notification consumer\nDeployment Pods" as notificationPods <<Passive>>
+
+    artifact "ConfigMaps\nservice URLs, topics, flags, logging" as configMaps
+    artifact "Secrets\ncredentials and API keys\n(values not shown)" as secrets
   }
 
-  together {
-    node "auth-api.plate.example.com" as AuthHost {
-      component "Auth / Tenant Service\nCloudflare Worker" as AuthService
-    }
+  package "Namespace: plate-data" as data {
+    component "auth-db-svc\nClusterIP Service" as authDbSvc
+    database "Auth PostgreSQL\nStatefulSet\nservice-owned schema" as authDb <<Auth>>
 
-    node "fitness-api.plate.example.com" as FitnessHost {
-      component "Fitness Logging Service\nCloudflare Worker" as FitnessService
-    }
+    component "workout-db-svc\nClusterIP Service" as workoutDbSvc
+    database "Workout PostgreSQL\nStatefulSet\nservice-owned schema" as workoutDb <<Workout>>
 
-    node "social-api.plate.example.com" as SocialHost {
-      component "Social Feed Service\nCloudflare Worker" as SocialService
-    }
+    component "nutrition-db-svc\nClusterIP Service" as nutritionDbSvc
+    database "Nutrition PostgreSQL\nStatefulSet\nservice-owned schema" as nutritionDb <<Nutrition>>
+
+    component "social-db-svc\nClusterIP Service" as socialDbSvc
+    database "Social PostgreSQL\nStatefulSet\nservice-owned schema" as socialDb <<Social>>
+
+    artifact "outbox_events tables\none per service database" as outboxTables
+    storage "Persistent storage\nStorageClass -> PV -> PVC\nDB and Kafka data survives Pod restart" as persistentStorage
+    component "Backup CronJob\nseparate backup storage" as backup
+  }
+
+  package "Namespace: plate-events" as events {
+    queue "Kafka\nStatefulSet + ClusterIP Service" as kafka
+    artifact "Kafka topics\ndomain events" as domainTopics
+    queue "Retry topics" as retryTopics
+    queue "Dead-letter topics" as deadLetterTopics
+
+    component "Kafka Connect\nDeployment + ClusterIP Service" as kafkaConnect
+    component "Debezium outbox connector" as debezium
   }
 }
 
-together {
-  database "Supabase Auth DB\nPostgreSQL" as AuthDB
-  database "Supabase Fitness DB\nPostgreSQL" as FitnessDB
-  database "Supabase Social DB\nPostgreSQL" as SocialDB
-}
+user --> pwa : uses app
+pwa --> cloudflare : external HTTPS
+cloudflare -[#1F6FEB]-> ingress : HTTPS 443
+ingress -[#1F6FEB]-> nginx : Ingress handling
 
-storage "Supabase Storage\nMedia Files" as MediaStorage
+nginx -[#2F855A]-> nextSvc : HTTPS / frontend
+nginx -[#2F855A]-> identitySvc : HTTP /api/identity/*
+nginx -[#2F855A]-> workoutSvc : HTTP /api/workouts/*
+nginx -[#2F855A]-> nutritionSvc : HTTP /api/nutrition/*
+nginx -[#2F855A]-> socialSvc : HTTP /api/social/*
+nginx -[#2F855A]-> analyticsSvc : HTTP /api/analytics/*
 
-User --> Frontend : Uses app
+nextSvc -[#2F855A]-> nextPods : selects Pods
+identitySvc -[#2F855A]-> identityPods : selects Pods
+workoutSvc -[#2F855A]-> workoutPods : selects Pods
+nutritionSvc -[#2F855A]-> nutritionPods : selects Pods
+socialSvc -[#2F855A]-> socialPods : selects Pods
+analyticsSvc -[#2F855A]-> analyticsPods : selects Pods
+notificationSvc -[#2F855A]-> notificationPods : selects Pods
 
-Frontend --> Gateway : HTTPS API requests
+identityPods -[#7B61A8]-> authDbSvc : PostgreSQL via K8s DNS
+workoutPods -[#7B61A8]-> workoutDbSvc : PostgreSQL via K8s DNS
+nutritionPods -[#7B61A8]-> nutritionDbSvc : PostgreSQL via K8s DNS
+socialPods -[#7B61A8]-> socialDbSvc : PostgreSQL via K8s DNS
+authDbSvc -[#7B61A8]-> authDb : routes to DB
+workoutDbSvc -[#7B61A8]-> workoutDb : routes to DB
+nutritionDbSvc -[#7B61A8]-> nutritionDb : routes to DB
+socialDbSvc -[#7B61A8]-> socialDb : routes to DB
 
-Gateway --> AuthService : /auth/*
-Gateway --> FitnessService : /fitness/*
-Gateway --> SocialService : /social/*
+identityPods -[#7B61A8]-> outboxTables : one transaction: business data + outbox
+workoutPods -[#7B61A8]-> outboxTables : one transaction: business data + outbox
+nutritionPods -[#7B61A8]-> outboxTables : one transaction: business data + outbox
+socialPods -[#7B61A8]-> outboxTables : one transaction: business data + outbox
+authDb --> outboxTables : contains auth outbox
+workoutDb --> outboxTables : contains workout outbox
+nutritionDb --> outboxTables : contains nutrition outbox
+socialDb --> outboxTables : contains social outbox
 
-AuthService --> AuthDB : users\ntenants\nprofiles\nsettings
+outboxTables -[#B7791F]-> debezium : CDC reads outbox rows
+debezium -[#B7791F]-> kafkaConnect : connector runs through Connect
+kafkaConnect -[#B7791F]-> kafka : publishes event records
+kafka --> domainTopics : routes domain events
 
-FitnessService --> FitnessDB : workouts\nexercises\nsets\nfood logs\nfood items
+kafka -[#B7791F]-> socialPods : async event consumption
+kafka -[#B7791F]-> analyticsPods : async event consumption
+kafka -[#B7791F]-> notificationPods : async event consumption
+analyticsPods -[#B7791F]-> retryTopics : transient failure
+retryTopics -[#B7791F]-> analyticsPods : retry delivery
+notificationPods -[#B7791F]-> deadLetterTopics : exhausted failure
 
-SocialService --> SocialDB : posts\nlikes\ncomments\nfollows
+configMaps ..> nextPods : config injection
+configMaps ..> identityPods : config injection
+configMaps ..> workoutPods : config injection
+configMaps ..> nutritionPods : config injection
+configMaps ..> socialPods : config injection
+configMaps ..> analyticsPods : config injection
+configMaps ..> notificationPods : config injection
+secrets ..> identityPods : secret injection
+secrets ..> workoutPods : secret injection
+secrets ..> nutritionPods : secret injection
+secrets ..> socialPods : secret injection
+secrets ..> kafkaConnect : secret injection
 
-Frontend --> MediaStorage : Uploads and views media
-SocialService --> MediaStorage : Store media URLs
+authDb --> persistentStorage : PVC mount
+workoutDb --> persistentStorage : PVC mount
+nutritionDb --> persistentStorage : PVC mount
+socialDb --> persistentStorage : PVC mount
+kafka --> persistentStorage : broker PVC mount
+backup --> persistentStorage : backup PVC
 
-AuthService ..> FitnessService : Validate user and tenant refs
-AuthService ..> SocialService : Validate user and tenant refs
-SocialService ..> FitnessService : Get workout and food summaries
+note right of nginx
+External traffic path:
+User Device -> Cloudflare ->
+Kubernetes Ingress -> Nginx Ingress Controller
+-> ClusterIP Service -> Application Pod.
 
-note right of Frontend
-PWA Features:
-- Installable web app
-- Mobile-first UI
-- App manifest
-- Service worker support
+Only the Ingress is publicly reachable.
+All ClusterIP Services and internal ports stay private.
+ClusterIP Services provide Kubernetes DNS/service discovery.
 end note
 
-note bottom of Gateway
-Frontend only calls the API Gateway.
-The gateway routes requests to the correct service.
+note bottom of outboxTables
+The outbox is the publication boundary.
+Domain services do not publish directly to Kafka
+and do not call one another directly. Consumers
+process events idempotently; failed records retry
+and can be moved to dead-letter topics.
 end note
 
-note bottom of AuthService
-Each service is separately deployed
-as a Cloudflare Worker.
+note bottom of data
+Each service owns its PostgreSQL schema/database.
+There are no cross-service database foreign keys.
+Persistent Kubernetes storage is distinct from
+ephemeral container storage and external backups.
 end note
 
-note bottom of AuthDB
-Each service owns its own database.
-No service directly queries another
-service's database.
+note bottom of cluster
+The current home-server topology is one K3s node, so a single replica or
+single PostgreSQL/Kafka instance is not high availability. Stateless
+Deployments can scale horizontally when worker nodes are added later.
 end note
+
+legend right
+  |= Visual cue |= Meaning |
+  |<#1F6FEB> blue arrow | external HTTPS / ingress traffic |
+  |<#2F855A> green arrow | synchronous HTTP / service routing |
+  |<#7B61A8> purple arrow | database communication |
+  |<#B7791F> amber arrow | asynchronous Kafka event flow |
+  | ..> dotted arrow | ConfigMap or Secret injection |
+endlegend
 
 @enduml

@@ -1,42 +1,85 @@
+
 # Plate
 
-Plate is a multi-tenant social fitness tracking Progressive Web App (PWA) focused on workout tracking, food logging, and social accountability. Users can create an account, log meals, track workouts, create posts, follow other users, like posts, comment on posts, and view user profile feeds.
+Plate is a multi-tenant social fitness tracking Progressive Web App (PWA) focused on workout tracking, food logging, analytics, and social accountability.
 
-The platform is designed with a microservice architecture where each major business domain is separated into its own API service and database.
+Users can create accounts, join communities, track workouts, log meals, view progress, create posts, follow other users, like posts, comment on posts, and receive notifications.
+
+Plate uses a microservice-based, event-driven architecture deployed to a Kubernetes cluster running on a home server.
 
 ---
 
 ## Project Overview
 
-Plate combines the personal tracking features of a fitness journal with the social interaction features of platforms like Strava and Instagram.
+Plate combines the personal tracking features of a fitness journal with the social interaction features of platforms such as Strava and Instagram.
 
 Users can:
 
-- Register and log in
-- Create or join a tenant account
-- Track workouts
-- Log food and meals
-- Create workout and food posts
-- View a social feed
-- View user profile feeds
-- Follow other users
-- Like and comment on posts
-- Configure tenant settings as a tenant admin
+* Register and log in
+* Create or join a tenant
+* Manage a user profile
+* Track workouts
+* Log meals and nutrition
+* View daily, weekly, and monthly summaries
+* Create workout, food, progress, and general posts
+* View a personalized social feed
+* View user profile feeds
+* Follow and unfollow other users
+* Like and comment on posts
+* Receive social notifications
+* Configure tenant settings as a tenant administrator
 
-This application will be built as a **Progressive Web App (PWA)** so users can install it on supported mobile and desktop devices.
+Plate will be delivered as a **Progressive Web App**, allowing users to access it through a browser or install it on supported mobile and desktop devices.
 
 ---
 
-## Core Concept
+## Core Concepts
 
-Plate is built around two main ideas:
+Plate is built around three primary concepts.
 
-1. **Fitness Tracking**
+### 1. Fitness Tracking
 
-   - Users can track workouts, exercises, sets, reps, weight, meals, calories, macros, and progress.
-2. **Social Accountability**
+Users can track:
 
-   - Users can share workouts and food logs as posts, interact with other users, and build a feed based on people they follow.
+* Workouts
+* Exercises
+* Sets
+* Repetitions
+* Weight
+* Duration
+* Meals
+* Food items
+* Calories
+* Protein
+* Carbohydrates
+* Fat
+* Fitness progress
+
+### 2. Social Accountability
+
+Users can:
+
+* Share workouts and meals as posts
+* Follow other users
+* View a personalized feed
+* Like posts
+* Comment on posts
+* View user profiles
+* Receive notifications for social activity
+
+### 3. Multi-Tenant Communities
+
+Plate supports tenant-based communities or workspaces.
+
+A tenant can represent:
+
+* A gym
+* A sports team
+* A fitness group
+* A workplace wellness community
+* A private training community
+
+Users may belong to one or more tenants, depending on the final membership implementation.
 
 ---
 
@@ -48,21 +91,133 @@ Plate will be developed as a:
 Progressive Web App (PWA)
 ```
 
-The PWA approach allows the app to behave more like a native mobile app while still being delivered through the web.
+The PWA approach allows Plate to behave more like a native application while still being delivered through the web.
 
-Planned PWA features include:
+Planned PWA capabilities include:
 
-- Installable app experience
-- Responsive mobile-first design
-- App manifest
-- Service worker support
-- Offline-friendly static assets
-- Home screen launch support
-- Automatic updates when the deployed web app changes
+* Installable application experience
+* Responsive mobile-first design
+* Web application manifest
+* Service worker support
+* Offline-friendly static assets
+* Home-screen launch support
+* Automatic application updates
+* Push notification support in a later phase
 
 ---
 
-## Tech Stack
+## Architecture Goals
+
+The Plate architecture is designed around the following goals:
+
+* Clear service ownership
+* Independent service deployment
+* Loose coupling between business domains
+* Reliable event-driven synchronization
+* Secure tenant-aware access control
+* Independent database ownership
+* Scalable stateless services
+* Resilient asynchronous processing
+* Container orchestration through Kubernetes
+* A deployment model that can begin on one server and expand later
+
+---
+
+## Core Architecture Principles
+
+The following rules apply across the Plate system.
+
+### No Direct Domain-Service Communication
+
+Plate domain services must not directly call one another for business-domain synchronization.
+
+For example:
+
+```text
+Social Service -> Workout Service
+```
+
+should not be required to synchronize workout information.
+
+Instead, services share domain changes through Kafka events.
+
+### Service-Owned Databases
+
+Each service owns its database.
+
+Services must not:
+
+* Query another service's database
+* Modify another service's records
+* Create cross-service database foreign keys
+* Depend on another service's internal schema
+
+Cross-service references are stored as identifiers such as:
+
+```text
+userId
+tenantId
+workoutId
+mealId
+postId
+```
+
+### Event-Driven Synchronization
+
+Cross-service data synchronization occurs through domain events.
+
+Examples include:
+
+```text
+UserRegistered
+TenantCreated
+WorkoutCreated
+MealLogged
+PostCreated
+PostLiked
+CommentCreated
+UserFollowed
+```
+
+### Transactional Outbox
+
+Services do not publish domain events directly to Kafka as part of the main request transaction.
+
+Instead, each service:
+
+1. Begins a database transaction.
+2. Writes the business data.
+3. Writes an event to an outbox table.
+4. Commits both changes together.
+5. Returns the API response.
+6. Allows Debezium to capture the committed outbox event.
+7. Publishes the event to Kafka through Kafka Connect.
+
+This prevents the system from saving business data without publishing the corresponding event.
+
+### Idempotent Consumers
+
+Kafka consumers must safely handle duplicate event delivery.
+
+Consumers store processed event identifiers so the same event is not applied more than once.
+
+### Internal Infrastructure Is Private
+
+The following components must not be directly exposed to the public internet:
+
+* Domain services
+* PostgreSQL databases
+* Kafka
+* Kafka Connect
+* Debezium connectors
+* Internal Kubernetes Services
+* Administrative interfaces
+
+Public traffic enters through Cloudflare and the Kubernetes Ingress.
+
+---
+
+## Technology Stack
 
 ### Frontend
 
@@ -71,48 +226,129 @@ Next.js
 TypeScript
 React
 Tailwind CSS
-PWA support
+Progressive Web App support
 ```
 
-The frontend will be hosted separately from the backend services and will communicate with the backend through API calls.
+The frontend will run as a containerized Next.js application inside the Kubernetes cluster.
+
+The frontend communicates with backend services through the public API Gateway.
+
+---
 
 ### Backend
 
 ```text
-Cloudflare Workers
 TypeScript
+Node.js
 REST APIs
+Containerized domain services
 ```
 
-Each backend service will be deployed as a separate Cloudflare Worker.
+The backend is divided into independently deployed services.
+
+The exact Node.js framework may be selected during implementation.
+
+Possible options include:
+
+* Fastify
+* Express
+* NestJS
+* Hono
+
+---
+
+### Authentication
+
+```text
+Token or session-based authentication
+Tenant-aware authorization
+Role-based access control
+```
+
+Better Auth or an equivalent authentication library may be used.
+
+Authentication credentials are validated before trusted user and tenant context is forwarded to backend services.
+
+Backend services must not trust arbitrary identity headers sent directly by a client.
+
+---
 
 ### Database
 
 ```text
-Supabase PostgreSQL
+PostgreSQL
+Service-owned databases
+Transactional outbox tables
+Processed-event tables
 ```
 
-Each microservice will use its own Supabase-hosted PostgreSQL database.
+Each domain service owns its persistent data.
 
-### Hosting and Infrastructure
+The initial deployment may run PostgreSQL workloads inside Kubernetes using persistent storage.
+
+A PostgreSQL operator or externally managed database may be introduced later.
+
+---
+
+### Event Infrastructure
 
 ```text
-Cloudflare DNS
-Cloudflare HTTPS
-Cloudflare Workers
-Supabase PostgreSQL
-Supabase Storage
+Apache Kafka
+Kafka Connect
+Debezium
+Transactional outbox pattern
+Consumer groups
+Retry topics
+Dead-letter topics
 ```
 
-### Optional Tools
+Kafka is used for asynchronous domain events and cross-service synchronization.
+
+---
+
+### Deployment and Infrastructure
 
 ```text
-pgAdmin
+Ubuntu home server
+Docker
+Kubernetes
+K3s
+Nginx Ingress Controller
+Cloudflare
 GitHub Actions
-Wrangler CLI
+GitHub Container Registry
+PersistentVolumeClaims
+Kubernetes ConfigMaps
+Kubernetes Secrets
 ```
 
-Docker and Nginx are not required for the initial deployment because the backend services are deployed as serverless Cloudflare Workers.
+Optional or planned infrastructure includes:
+
+```text
+Argo CD
+Helm
+Prometheus
+Grafana
+Loki
+OpenTelemetry
+```
+
+---
+
+## Docker and Kubernetes Responsibilities
+
+Docker and Kubernetes serve different purposes in Plate.
+
+```text
+Docker builds and packages Plate applications.
+GitHub Container Registry stores the Docker images.
+Kubernetes runs and manages the containers.
+K3s provides the Kubernetes cluster.
+Cloudflare provides the public DNS, TLS, and external entry point.
+Nginx Ingress routes incoming traffic inside the cluster.
+```
+
+Docker Compose may be used for local development, but it is not the target production orchestrator.
 
 ---
 
@@ -122,518 +358,335 @@ Docker and Nginx are not required for the initial deployment because the backend
 plate.aareid.ca
 ```
 
-Frontend Next.js PWA.
+Public Next.js PWA.
 
 ```text
 api.plate.aareid.ca
 ```
 
-Public API Gateway.
+Public API Gateway endpoint.
 
-```text
-auth-api.plate.aareid.ca
-```
+Additional subdomains may be used for administrative or infrastructure purposes, but internal domain services should not normally be publicly exposed.
 
-Auth and Tenant Service.
-
-```text
-fitness-api.plate.aareid.ca
-```
-
-Fitness Logging Service.
-
-```text
-social-api.plate.aareid.ca
-```
-
-Social Feed Service.
-
-The frontend should only call the public API Gateway:
+The frontend should send backend requests through:
 
 ```text
 api.plate.aareid.ca
 ```
 
-The API Gateway will route requests to the correct backend service.
+The API Gateway routes requests to the responsible Kubernetes Service.
 
 ---
 
 ## High-Level Architecture
 
 ```text
-User Browser / Mobile PWA
-        |
-        v
-plate.aareid.ca
-Next.js + TypeScript PWA
-        |
-        v
-api.plate.aareid.ca
-Cloudflare Worker API Gateway
-        |
-        v
-+----------------------+------------------------+----------------------+
-| Auth / Tenant Service| Fitness Logging Service| Social Feed Service  |
-| Cloudflare Worker    | Cloudflare Worker      | Cloudflare Worker    |
-+----------------------+------------------------+----------------------+
-        |                       |                         |
-        v                       v                         v
-Supabase Auth DB       Supabase Fitness DB       Supabase Social DB
+User Browser / Installed PWA
+            |
+            v
+        Cloudflare
+     DNS / TLS / Proxy
+            |
+            v
+  Kubernetes Ingress Resource
+            |
+            v
+   Nginx Ingress Controller
+            |
+            v
+        API Gateway
+            |
+            +-------------------------------+
+            |               |               |
+            v               v               v
+ Identity & Tenant      Workout         Nutrition
+     Service            Service          Service
+            |
+            +-------------------------------+
+            |               |               |
+            v               v               v
+        Social          Analytics      Notification
+        Service          Service          Service
 ```
 
----
-
-## Microservice Architecture
-
-Plate is designed as a true microservice architecture.
-
-Each service is:
-
-- Separately deployed
-- Accessed through API calls
-- Responsible for one business domain
-- Connected to its own database
-- Independent from the frontend application
-
-The frontend does not contain backend business logic. It communicates with the backend through the API Gateway.
+Each service owns its database and does not directly query another service's data.
 
 ---
 
-## Folder Structure
+## Synchronous Request Flow
 
+User commands and queries follow this general path:
 
 ```text
-plate/
-├── README.md
-├── .gitignore
-├── package.json
-├── pnpm-workspace.yaml
-├── turbo.json
-├── .env.example
-│
-├── apps/
-│   └── web/
-│       ├── package.json
-│       ├── next.config.ts
-│       ├── tsconfig.json
-│       ├── public/
-│       │   ├── manifest.json
-│       │   ├── icons/
-│       │   └── screenshots/
-│       │
-│       └── src/
-│           ├── app/
-│           │   ├── layout.tsx
-│           │   ├── page.tsx
-│           │   ├── globals.css
-│           │   │
-│           │   ├── auth/
-│           │   │   ├── login/
-│           │   │   │   └── page.tsx
-│           │   │   └── register/
-│           │   │       └── page.tsx
-│           │   │
-│           │   ├── dashboard/
-│           │   │   └── page.tsx
-│           │   │
-│           │   ├── feed/
-│           │   │   └── page.tsx
-│           │   │
-│           │   ├── profile/
-│           │   │   └── [userId]/
-│           │   │       └── page.tsx
-│           │   │
-│           │   ├── workouts/
-│           │   │   ├── page.tsx
-│           │   │   └── new/
-│           │   │       └── page.tsx
-│           │   │
-│           │   ├── food/
-│           │   │   ├── page.tsx
-│           │   │   └── new/
-│           │   │       └── page.tsx
-│           │   │
-│           │   └── tenant/
-│           │       └── settings/
-│           │           └── page.tsx
-│           │
-│           ├── components/
-│           │   ├── ui/
-│           │   │   ├── Button.tsx
-│           │   │   ├── Input.tsx
-│           │   │   ├── Card.tsx
-│           │   │   └── Modal.tsx
-│           │   │
-│           │   ├── layout/
-│           │   │   ├── Navbar.tsx
-│           │   │   ├── Sidebar.tsx
-│           │   │   └── MobileNav.tsx
-│           │   │
-│           │   ├── feed/
-│           │   │   ├── FeedList.tsx
-│           │   │   ├── PostCard.tsx
-│           │   │   ├── LikeButton.tsx
-│           │   │   └── CommentList.tsx
-│           │   │
-│           │   ├── workouts/
-│           │   │   ├── WorkoutForm.tsx
-│           │   │   ├── ExerciseInput.tsx
-│           │   │   └── WorkoutCard.tsx
-│           │   │
-│           │   ├── food/
-│           │   │   ├── FoodLogForm.tsx
-│           │   │   ├── FoodItemInput.tsx
-│           │   │   └── FoodLogCard.tsx
-│           │   │
-│           │   └── profile/
-│           │       ├── ProfileHeader.tsx
-│           │       └── ProfileFeed.tsx
-│           │
-│           ├── features/
-│           │   ├── auth/
-│           │   │   ├── api.ts
-│           │   │   ├── hooks.ts
-│           │   │   └── types.ts
-│           │   │
-│           │   ├── fitness/
-│           │   │   ├── api.ts
-│           │   │   ├── hooks.ts
-│           │   │   └── types.ts
-│           │   │
-│           │   ├── social/
-│           │   │   ├── api.ts
-│           │   │   ├── hooks.ts
-│           │   │   └── types.ts
-│           │   │
-│           │   └── tenant/
-│           │       ├── api.ts
-│           │       ├── hooks.ts
-│           │       └── types.ts
-│           │
-│           ├── lib/
-│           │   ├── api-client.ts
-│           │   ├── auth-token.ts
-│           │   ├── constants.ts
-│           │   └── utils.ts
-│           │
-│           ├── hooks/
-│           │   ├── useAuth.ts
-│           │   └── useDebounce.ts
-│           │
-│           └── types/
-│               ├── api.ts
-│               ├── post.ts
-│               ├── user.ts
-│               ├── workout.ts
-│               └── food.ts
-│
-├── services/
-│   ├── api-gateway/
-│   │   ├── package.json
-│   │   ├── wrangler.toml
-│   │   ├── tsconfig.json
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── routes/
-│   │       │   ├── auth.routes.ts
-│   │       │   ├── fitness.routes.ts
-│   │       │   └── social.routes.ts
-│   │       ├── middleware/
-│   │       │   ├── auth.middleware.ts
-│   │       │   ├── cors.middleware.ts
-│   │       │   └── error.middleware.ts
-│   │       ├── clients/
-│   │       │   ├── auth.client.ts
-│   │       │   ├── fitness.client.ts
-│   │       │   └── social.client.ts
-│   │       └── utils/
-│   │           └── response.ts
-│   │
-│   ├── auth-tenant-service/
-│   │   ├── package.json
-│   │   ├── wrangler.toml
-│   │   ├── tsconfig.json
-│   │   ├── migrations/
-│   │   │   └── 001_init_auth_tenant.sql
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── routes/
-│   │       │   ├── auth.routes.ts
-│   │       │   ├── tenant.routes.ts
-│   │       │   └── profile.routes.ts
-│   │       ├── controllers/
-│   │       │   ├── auth.controller.ts
-│   │       │   ├── tenant.controller.ts
-│   │       │   └── profile.controller.ts
-│   │       ├── services/
-│   │       │   ├── auth.service.ts
-│   │       │   ├── tenant.service.ts
-│   │       │   └── profile.service.ts
-│   │       ├── repositories/
-│   │       │   ├── user.repository.ts
-│   │       │   ├── tenant.repository.ts
-│   │       │   └── profile.repository.ts
-│   │       ├── middleware/
-│   │       │   ├── require-auth.ts
-│   │       │   └── require-tenant-admin.ts
-│   │       ├── db/
-│   │       │   └── supabase.ts
-│   │       ├── schemas/
-│   │       │   ├── auth.schema.ts
-│   │       │   ├── tenant.schema.ts
-│   │       │   └── profile.schema.ts
-│   │       └── types/
-│   │           ├── user.ts
-│   │           └── tenant.ts
-│   │
-│   ├── fitness-service/
-│   │   ├── package.json
-│   │   ├── wrangler.toml
-│   │   ├── tsconfig.json
-│   │   ├── migrations/
-│   │   │   └── 001_init_fitness.sql
-│   │   └── src/
-│   │       ├── index.ts
-│   │       ├── routes/
-│   │       │   ├── workout.routes.ts
-│   │       │   └── food.routes.ts
-│   │       ├── controllers/
-│   │       │   ├── workout.controller.ts
-│   │       │   └── food.controller.ts
-│   │       ├── services/
-│   │       │   ├── workout.service.ts
-│   │       │   └── food.service.ts
-│   │       ├── repositories/
-│   │       │   ├── workout.repository.ts
-│   │       │   ├── exercise.repository.ts
-│   │       │   ├── food-log.repository.ts
-│   │       │   └── food-item.repository.ts
-│   │       ├── clients/
-│   │       │   └── auth.client.ts
-│   │       ├── db/
-│   │       │   └── supabase.ts
-│   │       ├── schemas/
-│   │       │   ├── workout.schema.ts
-│   │       │   └── food.schema.ts
-│   │       └── types/
-│   │           ├── workout.ts
-│   │           └── food.ts
-│   │
-│   └── social-feed-service/
-│       ├── package.json
-│       ├── wrangler.toml
-│       ├── tsconfig.json
-│       ├── migrations/
-│       │   └── 001_init_social.sql
-│       └── src/
-│           ├── index.ts
-│           ├── routes/
-│           │   ├── post.routes.ts
-│           │   ├── feed.routes.ts
-│           │   ├── comment.routes.ts
-│           │   ├── like.routes.ts
-│           │   └── follow.routes.ts
-│           ├── controllers/
-│           │   ├── post.controller.ts
-│           │   ├── feed.controller.ts
-│           │   ├── comment.controller.ts
-│           │   ├── like.controller.ts
-│           │   └── follow.controller.ts
-│           ├── services/
-│           │   ├── post.service.ts
-│           │   ├── feed.service.ts
-│           │   ├── comment.service.ts
-│           │   ├── like.service.ts
-│           │   └── follow.service.ts
-│           ├── repositories/
-│           │   ├── post.repository.ts
-│           │   ├── comment.repository.ts
-│           │   ├── like.repository.ts
-│           │   └── follow.repository.ts
-│           ├── clients/
-│           │   ├── auth.client.ts
-│           │   └── fitness.client.ts
-│           ├── db/
-│           │   └── supabase.ts
-│           ├── schemas/
-│           │   ├── post.schema.ts
-│           │   ├── comment.schema.ts
-│           │   └── follow.schema.ts
-│           └── types/
-│               ├── post.ts
-│               ├── comment.ts
-│               └── follow.ts
-│
-├── packages/
-│   ├── shared/
-│   │   ├── package.json
-│   │   └── src/
-│   │       ├── types/
-│   │       │   ├── user.ts
-│   │       │   ├── tenant.ts
-│   │       │   ├── post.ts
-│   │       │   ├── workout.ts
-│   │       │   └── food.ts
-│   │       ├── constants/
-│   │       │   ├── roles.ts
-│   │       │   ├── post-types.ts
-│   │       │   └── visibility.ts
-│   │       └── utils/
-│   │           ├── dates.ts
-│   │           └── validation.ts
-│   │
-│   └── config/
-│       ├── eslint/
-│       └── typescript/
-│
-└── docs/
-    ├── diagrams/
-    │   ├── architecture.puml
-    │   ├── deployment.puml
-    │   ├── class-diagram.puml
-    │   ├── erd.puml
-    │   └── activity-diagrams/
-    │       ├── create-account.puml
-    │       ├── create-workout-post.puml
-    │       └── configure-tenant.puml
-    └── api/
-        ├── auth-tenant-service.md
-        ├── fitness-service.md
-        └── social-feed-service.md
+User
+-> Cloudflare
+-> Kubernetes Ingress
+-> Nginx Ingress Controller
+-> API Gateway
+-> Kubernetes ClusterIP Service
+-> Plate Service Pod
+-> Service-Owned PostgreSQL Database
 ```
 
+Synchronous HTTP is used when the user needs an immediate response.
 
-## Services
+Examples include:
+
+* Registering
+* Logging in
+* Creating a workout
+* Retrieving workout history
+* Logging a meal
+* Viewing a feed
+* Adding a comment
+
+---
+
+## Asynchronous Event Flow
+
+Cross-service synchronization follows this path:
+
+```text
+Service Request
+-> Business Data and Outbox Event Saved Atomically
+-> Transaction Commits
+-> Debezium Captures Outbox Record
+-> Kafka Connect Publishes Event
+-> Kafka Topic
+-> Consumer Group
+-> Interested Consumer Service
+-> Consumer Updates Its Own Database
+```
+
+Example:
+
+```text
+Workout Service
+-> Saves Workout
+-> Saves WorkoutCreated Outbox Event
+-> Debezium Captures Event
+-> Kafka Publishes WorkoutCreated
+-> Analytics Service Updates Workout Summary
+```
+
+---
+
+## Microservices
+
+Plate is separated into business-focused services.
 
 ### 1. API Gateway
 
-The API Gateway is the single public entry point for the frontend.
+The API Gateway is the main backend entry point for the frontend.
 
 Responsibilities:
 
-- Route requests to the correct service
-- Validate authentication tokens where needed
-- Hide internal service URLs from the frontend
-- Keep frontend API calls simple and consistent
+* Route requests to the responsible service
+* Validate authentication context
+* Apply common request policies
+* Apply rate limits where needed
+* Handle CORS
+* Attach trusted identity and tenant context
+* Hide internal Kubernetes service names
+* Provide consistent API responses
 
 Example routes:
 
 ```text
 /api/auth/*
-/api/fitness/*
+/api/tenants/*
+/api/workouts/*
+/api/nutrition/*
 /api/social/*
+/api/analytics/*
+/api/notifications/*
 ```
 
-Routing example:
-
-```text
-/api/auth/*     -> Auth / Tenant Service
-/api/fitness/*  -> Fitness Logging Service
-/api/social/*   -> Social Feed Service
-```
+The API Gateway is not responsible for domain business logic.
 
 ---
 
-### 2. Auth / Tenant Service
+### 2. Identity and Tenant Service
 
-The Auth / Tenant Service manages users, authentication, tenants, roles, and tenant configuration.
+The Identity and Tenant Service manages users, authentication, tenant membership, roles, and tenant settings.
 
 Responsibilities:
 
-- User registration
-- User login
-- Authentication
-- Tenant creation
-- Tenant settings
-- User profiles
-- Role management
-- Tenant admin permissions
+* User registration
+* User login
+* User logout
+* Session management
+* User profiles
+* Tenant creation
+* Tenant membership
+* Tenant invitations
+* Tenant role management
+* Tenant settings
+* Authorization context
 
 Main entities:
 
 ```text
-tenants
-tenant_settings
 users
 user_profiles
+sessions
+tenants
+tenant_memberships
+tenant_roles
+tenant_settings
+outbox_events
+processed_events
 ```
 
-User roles:
+Possible roles:
 
 ```text
+PLATFORM_ADMIN
 TENANT_ADMIN
-USER
+TENANT_MEMBER
 ```
 
-A tenant admin can do everything a regular user can do, plus configure the tenant account.
+Possible events produced:
+
+```text
+UserRegistered
+UserProfileUpdated
+TenantCreated
+UserJoinedTenant
+UserLeftTenant
+TenantRoleChanged
+TenantSettingsUpdated
+```
 
 ---
 
-### 3. Fitness Logging Service
+### 3. Workout Service
 
-The Fitness Logging Service manages workout tracking and food logging.
+The Workout Service manages workout tracking.
 
 Responsibilities:
 
-- Create workouts
-- Track exercises
-- Track workout sets
-- Log meals
-- Log food items
-- Store calories and macro information
-- Store workout and food history
+* Create workouts
+* Update workouts
+* Delete workouts
+* Track exercises
+* Track workout sets
+* Store repetitions and weight
+* Store workout duration
+* Store workout notes
+* Manage workout templates
+* Retrieve workout history
 
 Main entities:
 
 ```text
 workouts
+workout_exercises
 exercises
-workout_sets
-food_logs
-food_items
+set_entries
+workout_templates
+outbox_events
+processed_events
 ```
 
-This service stores external references such as:
+Possible events produced:
+
+```text
+WorkoutCreated
+WorkoutUpdated
+WorkoutDeleted
+```
+
+External identifiers may include:
 
 ```text
 user_id
 tenant_id
-post_id
 ```
 
-These IDs refer to data owned by other services.
+These values identify records owned by the Identity and Tenant Service but are not cross-database foreign keys.
 
 ---
 
-### 4. Social Feed Service
+### 4. Nutrition Service
 
-The Social Feed Service manages posts, likes, comments, follows, and user feeds.
+The Nutrition Service manages meals, food items, nutrition values, and dietary targets.
 
 Responsibilities:
 
-- Create posts
-- Display platform feed
-- Display user profile feeds
-- Like posts
-- Comment on posts
-- Follow users
-- Store post visibility
-- Connect social posts to workouts or food logs
+* Create meal logs
+* Update meal logs
+* Delete meal logs
+* Add food items
+* Store calories
+* Store macronutrients
+* Store nutrition targets
+* Retrieve food nutrition information
+* Integrate with an external nutrition API
+* Retrieve nutrition history
+
+Main entities:
+
+```text
+meals
+meal_entries
+food_items
+nutrition_facts
+daily_nutrition_targets
+outbox_events
+processed_events
+```
+
+Possible events produced:
+
+```text
+MealLogged
+MealUpdated
+MealDeleted
+NutritionTargetUpdated
+```
+
+The service may call an external nutrition provider to retrieve food information.
+
+It should handle external API failures without corrupting saved meal data.
+
+---
+
+### 5. Social Service
+
+The Social Service manages posts, likes, comments, follows, and social feeds.
+
+Responsibilities:
+
+* Create posts
+* Update posts
+* Delete posts
+* View platform feeds
+* View tenant feeds
+* View user profile feeds
+* Like and unlike posts
+* Add comments
+* Follow and unfollow users
+* Store post visibility
+* Maintain social feed projections
 
 Main entities:
 
 ```text
 posts
 comments
-likes
+post_likes
 follows
+feed_entries
+outbox_events
+processed_events
 ```
 
 Post types:
 
 ```text
 WORKOUT
-FOOD
+MEAL
 GENERAL
 PROGRESS
 ```
@@ -647,33 +700,216 @@ FOLLOWERS_ONLY
 PRIVATE
 ```
 
+Possible events produced:
+
+```text
+PostCreated
+PostUpdated
+PostDeleted
+PostLiked
+PostUnliked
+CommentCreated
+CommentDeleted
+UserFollowed
+UserUnfollowed
+```
+
+The Social Service may store references such as:
+
+```text
+workout_id
+meal_id
+user_id
+tenant_id
+```
+
+These are identifiers, not direct database relationships to another service.
+
 ---
 
-## Database Strategy
+### 6. Analytics Service
 
-Each microservice owns its own database.
+The Analytics Service creates read-optimized fitness and nutrition summaries.
+
+Responsibilities:
+
+* Calculate daily workout summaries
+* Calculate weekly workout summaries
+* Calculate monthly workout summaries
+* Calculate daily nutrition summaries
+* Calculate weekly nutrition summaries
+* Calculate monthly nutrition summaries
+* Track workout trends
+* Track nutrition trends
+* Calculate progress metrics
+* Provide dashboard projections
+
+Main entities:
 
 ```text
-Auth / Tenant Service  -> Supabase Auth DB
-Fitness Logging Service -> Supabase Fitness DB
-Social Feed Service -> Supabase Social DB
+workout_summaries
+nutrition_summaries
+progress_metrics
+analytics_projections
+processed_events
 ```
 
-Services should not directly query each other’s databases.
-
-Bad:
+The Analytics Service primarily consumes:
 
 ```text
-Social Feed Service directly queries Fitness DB
+WorkoutCreated
+WorkoutUpdated
+WorkoutDeleted
+MealLogged
+MealUpdated
+MealDeleted
 ```
 
-Good:
+Analytics data is derived from events and stored in its own database.
+
+The service does not query the Workout or Nutrition databases directly.
+
+---
+
+### 7. Notification Service
+
+The Notification Service creates and manages user notifications.
+
+Responsibilities:
+
+* Create in-app notifications
+* Notify users about new followers
+* Notify users about likes
+* Notify users about comments
+* Store notification preferences
+* Mark notifications as read
+* Support future email notifications
+* Support future push notifications
+
+Main entities:
 
 ```text
-Social Feed Service calls Fitness Logging Service API
+notifications
+notification_preferences
+processed_events
 ```
 
-This keeps each service independent and prevents tight database coupling.
+The Notification Service may consume:
+
+```text
+UserFollowed
+PostLiked
+CommentCreated
+TenantInvitationCreated
+```
+
+---
+
+## Database Ownership
+
+Each service owns its database or independently managed PostgreSQL schema.
+
+| Service                     | Owned Data                                                       |
+| --------------------------- | ---------------------------------------------------------------- |
+| Identity and Tenant Service | Users, sessions, profiles, tenants, memberships, roles, settings |
+| Workout Service             | Workouts, exercises, sets, templates                             |
+| Nutrition Service           | Meals, food items, nutrition facts, nutrition targets            |
+| Social Service              | Posts, comments, likes, follows, feeds                           |
+| Analytics Service           | Summaries, projections, progress metrics                         |
+| Notification Service        | Notifications and notification preferences                       |
+
+Foreign keys are allowed within a service-owned database.
+
+Cross-service foreign keys are prohibited.
+
+---
+
+## Transactional Outbox Pattern
+
+Every service that publishes domain events contains an `outbox_events` table.
+
+A typical outbox event contains:
+
+```text
+event_id
+aggregate_id
+aggregate_type
+event_type
+tenant_id
+payload
+schema_version
+occurred_at
+created_at
+```
+
+Example transaction:
+
+```text
+BEGIN TRANSACTION
+
+INSERT INTO workouts (...)
+INSERT INTO outbox_events (
+  event_id,
+  aggregate_id,
+  aggregate_type,
+  event_type,
+  tenant_id,
+  payload,
+  schema_version,
+  occurred_at
+)
+
+COMMIT TRANSACTION
+```
+
+Debezium observes the committed outbox record and publishes the event through Kafka Connect.
+
+---
+
+## Kafka Event Conventions
+
+Possible topic names include:
+
+```text
+plate.identity.events
+plate.workout.events
+plate.nutrition.events
+plate.social.events
+plate.analytics.events
+plate.notification.events
+```
+
+Retry and dead-letter topics may use names such as:
+
+```text
+plate.workout.events.retry
+plate.workout.events.dead-letter
+```
+
+Each event should include:
+
+```text
+eventId
+eventType
+aggregateId
+tenantId
+occurredAt
+schemaVersion
+correlationId
+payload
+```
+
+Consumers should use separate consumer groups based on their responsibilities.
+
+Example:
+
+```text
+analytics-workout-consumer
+social-workout-consumer
+notification-social-consumer
+```
+
+The final topic strategy may evolve as the system is implemented.
 
 ---
 
@@ -681,206 +917,513 @@ This keeps each service independent and prevents tight database coupling.
 
 Plate is a multi-tenant platform.
 
-A tenant represents a separate account, organization, community, or workspace inside the platform.
+A tenant represents a separate organization, community, workspace, or fitness group.
 
-Each tenant has:
+Each tenant may contain:
 
-- Tenant name
-- Tenant slug
-- Tenant settings
-- Tenant admin
-- Users
-- Posts
-- Workouts
-- Food logs
+* Tenant settings
+* Tenant administrators
+* Tenant members
+* Workouts
+* Meals
+* Posts
+* Tenant-specific visibility rules
 
-Users belong to a tenant through:
+Users belong to tenants through a membership relationship.
+
+```text
+User
+-> Tenant Membership
+-> Tenant
+```
+
+A membership includes information such as:
+
+```text
+user_id
+tenant_id
+role
+status
+joined_at
+```
+
+Tenant-owned records should contain:
 
 ```text
 tenant_id
 ```
 
-Tenant admins can configure their own tenant account but do not control the entire platform.
+Backend services are responsible for validating tenant access.
+
+A client must not gain access to another tenant by manually changing a `tenantId` request value.
+
+### Tenant Roles
+
+Possible tenant roles include:
+
+```text
+TENANT_ADMIN
+TENANT_MEMBER
+```
+
+A platform administrator has platform-wide responsibilities and is separate from a tenant administrator.
+
+### Tenant-Aware Constraints
+
+Examples include:
+
+```text
+UNIQUE (tenant_id, user_id)
+UNIQUE (tenant_id, slug)
+UNIQUE (post_id, user_id)
+UNIQUE (follower_user_id, following_user_id)
+```
 
 ---
 
-## Main User Features
+## Kubernetes Deployment
 
-### Account Creation
+Plate will run on Kubernetes using K3s.
 
-Users can create an account and either:
+The initial target environment consists of:
 
-- Create a new tenant account
-- Join an existing tenant account
+* One Ubuntu home server
+* One K3s server node
+* One replica for most application services
+* Persistent local storage
+* Internal Kubernetes networking
+* Public access through the Kubernetes Ingress
+* Private administration through SSH or Tailscale
 
-If a user creates a new tenant, they become the tenant admin.
+A single-node cluster is not highly available.
 
-### Workout Tracking
+The initial deployment is intended for learning, development, testing, demonstrations, and early application usage.
 
-Users can create workout logs with:
+---
 
-- Workout title
-- Workout type
-- Duration
-- Exercises
-- Sets
-- Reps
-- Weight
-- Notes
+## Kubernetes Resources
 
-Workout logs can be shared as posts.
+| Component                   | Kubernetes Resource                      | Exposure           | Persistence             |
+| --------------------------- | ---------------------------------------- | ------------------ | ----------------------- |
+| Next.js PWA                 | Deployment                               | Through Ingress    | No                      |
+| API Gateway                 | Deployment                               | Through Ingress    | No                      |
+| Identity and Tenant Service | Deployment                               | Internal ClusterIP | No                      |
+| Workout Service             | Deployment                               | Internal ClusterIP | No                      |
+| Nutrition Service           | Deployment                               | Internal ClusterIP | No                      |
+| Social Service              | Deployment                               | Internal ClusterIP | No                      |
+| Analytics Service           | Deployment                               | Internal ClusterIP | No                      |
+| Notification Service        | Deployment                               | Internal ClusterIP | No                      |
+| PostgreSQL                  | StatefulSet or operator-managed resource | Internal           | Yes                     |
+| Kafka                       | StatefulSet or operator-managed resource | Internal           | Yes                     |
+| Kafka Connect               | Deployment                               | Internal           | Configuration-dependent |
+| Debezium Connector          | Kafka Connect connector configuration    | Internal           | No                      |
+| Database migrations         | Job                                      | Internal           | No                      |
+| Database backups            | CronJob                                  | Internal           | Backup storage          |
+| Configuration               | ConfigMap                                | Internal           | No                      |
+| Credentials                 | Secret                                   | Internal           | Stored by Kubernetes    |
+| Public routing              | Ingress                                  | Public entry point | No                      |
 
-### Food Logging
+---
 
-Users can log meals with:
+## Kubernetes Namespaces
 
-- Meal type
-- Food items
-- Calories
-- Protein
-- Carbohydrates
-- Fat
-- Notes
+The initial cluster may use a single namespace:
 
-Food logs can also be shared as posts.
+```text
+plate
+```
 
-### Social Feed
+As the project grows, workloads may be separated into namespaces such as:
 
-Users can:
+```text
+plate-app
+plate-data
+plate-events
+plate-observability
+```
 
-- View posts
-- Like posts
-- Comment on posts
-- Follow users
-- View user profiles
-- View user profile feeds
+The final namespace structure will depend on operational complexity.
 
-### Tenant Configuration
+---
 
-Tenant admins can:
+## Configuration and Secrets
 
-- Update tenant name
-- Update tenant slug
-- Configure default post visibility
-- Enable or disable public discovery
-- Configure comment settings
-- Manage tenant profile settings
+Non-sensitive configuration should use Kubernetes ConfigMaps.
+
+Examples include:
+
+```text
+Kafka topic names
+Environment names
+Feature flags
+Logging levels
+Internal service URLs
+```
+
+Sensitive values should use Kubernetes Secrets.
+
+Examples include:
+
+```text
+Database passwords
+Authentication secrets
+External API keys
+Cloudflare credentials
+Kafka credentials
+```
+
+Secrets must not be committed to GitHub, embedded in Docker images, or stored in ConfigMaps.
+
+---
+
+## Persistent Storage
+
+Persistent components require Kubernetes PersistentVolumeClaims.
+
+Persistent storage is required for:
+
+* PostgreSQL databases
+* Kafka data
+* Database backups
+* Uploaded media when stored locally
+
+Persistent data must survive:
+
+* Pod restarts
+* Container restarts
+* Application deployments
+
+The initial K3s deployment may use local-path storage.
+
+A more resilient storage provider may be introduced when additional cluster nodes are added.
+
+---
+
+## Public and Internal Networking
+
+The public request flow is:
+
+```text
+User
+-> Cloudflare
+-> Home Server
+-> Kubernetes Ingress
+-> Nginx Ingress Controller
+-> Next.js or API Gateway
+```
+
+Only the Ingress should normally be publicly reachable.
+
+The following Kubernetes Services should use internal networking:
+
+```text
+ClusterIP
+```
+
+Internal components include:
+
+* Domain services
+* PostgreSQL
+* Kafka
+* Kafka Connect
+* Analytics consumers
+* Notification consumers
+
+---
+
+## Planned Repository Structure
+
+```text
+plate/
+├── README.md
+├── package.json
+├── pnpm-workspace.yaml
+├── turbo.json
+├── .gitignore
+├── .env.example
+│
+├── apps/
+│   └── web/
+│       ├── package.json
+│       ├── next.config.ts
+│       ├── public/
+│       │   ├── manifest.json
+│       │   ├── icons/
+│       │   └── screenshots/
+│       └── src/
+│           ├── app/
+│           ├── components/
+│           ├── features/
+│           ├── hooks/
+│           ├── lib/
+│           └── types/
+│
+├── services/
+│   ├── api-gateway/
+│   ├── identity-tenant-service/
+│   ├── workout-service/
+│   ├── nutrition-service/
+│   ├── social-service/
+│   ├── analytics-service/
+│   └── notification-service/
+│
+├── packages/
+│   ├── event-contracts/
+│   ├── shared-types/
+│   ├── validation/
+│   └── config/
+│
+├── infrastructure/
+│   ├── docker/
+│   │   └── compose.local.yml
+│   ├── kubernetes/
+│   │   ├── namespaces/
+│   │   ├── ingress/
+│   │   ├── applications/
+│   │   ├── databases/
+│   │   ├── kafka/
+│   │   ├── config/
+│   │   ├── secrets/
+│   │   ├── jobs/
+│   │   └── storage/
+│   ├── helm/
+│   └── argocd/
+│
+├── docs/
+│   ├── PLATE_SYSTEM_ARCHITECTURE.md
+│   ├── api/
+│   ├── events/
+│   └── diagrams/
+│       ├── use-case.puml
+│       ├── architecture.puml
+│       ├── deployment.puml
+│       ├── class-diagram.puml
+│       ├── erd/
+│       ├── activity-diagrams/
+│       └── sequence-diagrams/
+│
+└── .github/
+    └── workflows/
+        ├── test.yml
+        ├── build-images.yml
+        └── deploy.yml
+```
+
+This structure may change as the implementation evolves.
 
 ---
 
 ## Example API Endpoints
 
-### Auth / Tenant Routes
+### Authentication and Tenant Routes
 
 ```text
-POST /api/auth/register
-POST /api/auth/login
-GET  /api/auth/me
-PATCH /api/auth/profile
-GET  /api/auth/tenant
-PATCH /api/auth/tenant/settings
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/me
+
+PATCH  /api/users/me/profile
+
+POST   /api/tenants
+GET    /api/tenants/:tenantId
+POST   /api/tenants/:tenantId/members
+PATCH  /api/tenants/:tenantId/settings
+PATCH  /api/tenants/:tenantId/members/:userId/role
 ```
 
-### Fitness Routes
+### Workout Routes
 
 ```text
-POST /api/fitness/workouts
-GET  /api/fitness/workouts/:id
-GET  /api/fitness/users/:userId/workouts
+POST   /api/workouts
+GET    /api/workouts/:workoutId
+PATCH  /api/workouts/:workoutId
+DELETE /api/workouts/:workoutId
 
-POST /api/fitness/food-logs
-GET  /api/fitness/food-logs/:id
-GET  /api/fitness/users/:userId/food-logs
+GET    /api/users/:userId/workouts
+GET    /api/tenants/:tenantId/workouts
+```
+
+### Nutrition Routes
+
+```text
+POST   /api/nutrition/meals
+GET    /api/nutrition/meals/:mealId
+PATCH  /api/nutrition/meals/:mealId
+DELETE /api/nutrition/meals/:mealId
+
+GET    /api/nutrition/foods/search
+GET    /api/users/:userId/meals
+GET    /api/users/:userId/nutrition-summary
 ```
 
 ### Social Routes
 
 ```text
-POST /api/social/posts
-GET  /api/social/feed
-GET  /api/social/users/:userId/feed
+POST   /api/social/posts
+GET    /api/social/feed
+GET    /api/social/users/:userId/feed
 
-POST /api/social/posts/:postId/like
-DELETE /api/social/posts/:postId/like
+POST   /api/social/posts/:postId/likes
+DELETE /api/social/posts/:postId/likes
 
-POST /api/social/posts/:postId/comments
-GET  /api/social/posts/:postId/comments
+POST   /api/social/posts/:postId/comments
+GET    /api/social/posts/:postId/comments
 
-POST /api/social/users/:userId/follow
+POST   /api/social/users/:userId/follow
 DELETE /api/social/users/:userId/follow
+```
+
+### Analytics Routes
+
+```text
+GET /api/analytics/workouts/daily
+GET /api/analytics/workouts/weekly
+GET /api/analytics/workouts/monthly
+
+GET /api/analytics/nutrition/daily
+GET /api/analytics/nutrition/weekly
+GET /api/analytics/nutrition/monthly
+
+GET /api/analytics/progress
+```
+
+### Notification Routes
+
+```text
+GET   /api/notifications
+PATCH /api/notifications/:notificationId/read
+PATCH /api/notifications/read-all
+GET   /api/notifications/preferences
+PATCH /api/notifications/preferences
 ```
 
 ---
 
 ## Core Workflows
 
-### User Creates Account
+### User Creates an Account
 
 ```text
-User opens app
--> Selects create account
--> Enters account details
--> Creates or joins tenant
--> Auth / Tenant Service validates data
--> User record is created
--> User profile is created
--> Token is generated
--> User is redirected to dashboard
+User opens Plate
+-> User submits registration details
+-> API Gateway validates the request
+-> Identity and Tenant Service validates registration data
+-> User and profile records are created
+-> UserRegistered event is written to the outbox
+-> Database transaction commits
+-> Authentication session or token is returned
+-> Debezium captures UserRegistered
+-> Kafka publishes the event
+-> Interested consumers process the event
+-> User is redirected to the dashboard
 ```
 
-### User Creates Workout Post
+---
+
+### User Logs a Workout
 
 ```text
-User enters workout details
--> Frontend validates form
--> Fitness Logging Service saves workout
--> Social Feed Service creates post
--> Post appears on user profile feed
--> Followers can view, like, and comment
+User submits workout
+-> API Gateway validates authentication
+-> Workout Service validates tenant access
+-> Workout Service validates workout data
+-> Workout and exercises are saved
+-> WorkoutCreated event is written to the outbox
+-> Database transaction commits
+-> API returns the saved workout
+-> Debezium captures WorkoutCreated
+-> Kafka publishes the event
+-> Analytics Service updates workout summaries
 ```
 
-### Tenant Admin Configures Tenant Account
+---
+
+### User Creates a Workout Post
+
+Creating a workout and creating a post are separate commands.
 
 ```text
-Tenant admin opens settings
--> Auth / Tenant Service validates role
--> Existing settings are displayed
--> Tenant admin updates settings
--> Auth / Tenant Service saves changes
--> Updated tenant settings are returned
+User logs workout
+-> Workout Service saves workout
+-> WorkoutCreated event is published
+
+User chooses to share workout
+-> User submits post request containing workoutId
+-> Social Service creates the post
+-> PostCreated event is written to the Social Service outbox
+-> Post appears in relevant feeds
+```
+
+The Social Service does not directly query the Workout database.
+
+It may store a snapshot or projection of the workout details required to display the post.
+
+---
+
+### User Logs a Meal
+
+```text
+User searches for food
+-> Nutrition Service requests nutrition information from external API
+-> Nutrition Service returns food options
+-> User submits meal
+-> Nutrition Service saves meal and food entries
+-> MealLogged event is written to the outbox
+-> Transaction commits
+-> Debezium captures MealLogged
+-> Kafka publishes the event
+-> Analytics Service updates nutrition summaries
+```
+
+---
+
+### User Follows Another User
+
+```text
+User submits follow request
+-> API Gateway validates authentication
+-> Social Service validates the request
+-> Social Service prevents self-following and duplicate follows
+-> Follow relationship is created
+-> UserFollowed event is written to the outbox
+-> Transaction commits
+-> Debezium captures UserFollowed
+-> Kafka publishes the event
+-> Notification Service creates a notification
+```
+
+---
+
+### Tenant Administrator Configures Tenant Settings
+
+```text
+Tenant administrator opens settings
+-> API Gateway validates authentication
+-> Identity and Tenant Service verifies tenant membership
+-> Identity and Tenant Service verifies TENANT_ADMIN role
+-> Settings are validated
+-> Tenant settings are updated
+-> TenantSettingsUpdated event is written to the outbox
+-> Transaction commits
+-> Updated settings are returned
 ```
 
 ---
 
 ## Planned Data Model
 
-### Auth / Tenant Service
+### Identity and Tenant Database
 
 ```text
-tenants
-- id
-- name
-- slug
-- owner_user_id
-- plan
-- created_at
-
-tenant_settings
-- id
-- tenant_id
-- default_post_visibility
-- allow_public_discovery
-- allow_comments
-- updated_at
-
 users
 - id
-- tenant_id
-- username
 - email
+- username
 - password_hash
-- role
+- status
 - created_at
+- updated_at
 
 user_profiles
 - id
@@ -890,64 +1433,190 @@ user_profiles
 - profile_image_url
 - fitness_goal
 - updated_at
+
+sessions
+- id
+- user_id
+- token_hash
+- expires_at
+- created_at
+
+tenants
+- id
+- name
+- slug
+- owner_user_id
+- status
+- created_at
+- updated_at
+
+tenant_memberships
+- id
+- tenant_id
+- user_id
+- role
+- status
+- joined_at
+
+tenant_settings
+- id
+- tenant_id
+- default_post_visibility
+- allow_public_discovery
+- allow_comments
+- updated_at
+
+outbox_events
+- event_id
+- aggregate_id
+- aggregate_type
+- event_type
+- tenant_id
+- payload
+- schema_version
+- occurred_at
 ```
 
-### Fitness Logging Service
+---
+
+### Workout Database
 
 ```text
 workouts
 - id
 - tenant_id
 - user_id
-- post_id
 - title
 - workout_type
 - duration_minutes
 - notes
+- started_at
+- completed_at
 - created_at
+- updated_at
 
 exercises
 - id
-- workout_id
 - name
 - muscle_group
+- description
+
+workout_exercises
+- id
+- workout_id
+- exercise_id
+- sequence_number
 - notes
 
-workout_sets
+set_entries
 - id
-- exercise_id
+- workout_exercise_id
 - set_number
 - reps
 - weight
+- duration_seconds
 - rest_seconds
 
-food_logs
+workout_templates
 - id
 - tenant_id
 - user_id
-- post_id
+- name
+- description
+- created_at
+
+outbox_events
+- event_id
+- aggregate_id
+- aggregate_type
+- event_type
+- tenant_id
+- payload
+- schema_version
+- occurred_at
+
+processed_events
+- event_id
+- consumer_name
+- processed_at
+```
+
+---
+
+### Nutrition Database
+
+```text
+meals
+- id
+- tenant_id
+- user_id
 - meal_type
 - title
+- notes
+- logged_at
+- created_at
+- updated_at
+
+meal_entries
+- id
+- meal_id
+- food_item_id
+- quantity
+- unit
 - calories
 - protein
-- carbs
+- carbohydrates
 - fat
-- notes
-- created_at
 
 food_items
 - id
-- food_log_id
+- external_source
+- external_id
 - name
+- brand
+- serving_size
+- serving_unit
+
+nutrition_facts
+- id
+- food_item_id
 - calories
 - protein
-- carbs
+- carbohydrates
 - fat
-- quantity
-- unit
+- fibre
+- sugar
+- sodium
+
+daily_nutrition_targets
+- id
+- tenant_id
+- user_id
+- calorie_target
+- protein_target
+- carbohydrate_target
+- fat_target
+- effective_date
+
+outbox_events
+- event_id
+- aggregate_id
+- aggregate_type
+- event_type
+- tenant_id
+- payload
+- schema_version
+- occurred_at
+
+processed_events
+- event_id
+- consumer_name
+- processed_at
 ```
 
-### Social Feed Service
+---
+
+### Social Database
 
 ```text
 posts
@@ -955,6 +1624,8 @@ posts
 - tenant_id
 - user_id
 - post_type
+- referenced_workout_id
+- referenced_meal_id
 - caption
 - media_url
 - visibility
@@ -969,7 +1640,7 @@ comments
 - created_at
 - updated_at
 
-likes
+post_likes
 - id
 - post_id
 - user_id
@@ -978,128 +1649,434 @@ likes
 follows
 - id
 - follower_user_id
-- following_user_id
+- followed_user_id
 - created_at
+
+feed_entries
+- id
+- user_id
+- post_id
+- score
+- created_at
+
+outbox_events
+- event_id
+- aggregate_id
+- aggregate_type
+- event_type
+- tenant_id
+- payload
+- schema_version
+- occurred_at
+
+processed_events
+- event_id
+- consumer_name
+- processed_at
 ```
 
 ---
 
-## Development Approach
-
-The project will be developed in phases.
-
-### Phase 1: Foundation
-
-- Set up Next.js TypeScript PWA
-- Set up Cloudflare deployment
-- Set up Supabase projects/databases
-- Create initial database schemas
-- Create API Gateway Worker
-
-### Phase 2: Authentication and Tenants
-
-- Register users
-- Log in users
-- Create tenant accounts
-- Assign tenant admin role
-- Create user profiles
-- Add tenant settings
-
-### Phase 3: Fitness Logging
-
-- Create workout logs
-- Add exercises
-- Add workout sets
-- Create food logs
-- Add food items
-
-### Phase 4: Social Feed
-
-- Create posts
-- Display feed
-- Display user profile feed
-- Add likes
-- Add comments
-- Add follows
-
-### Phase 5: PWA Polish
-
-- Add web app manifest
-- Add service worker
-- Improve mobile responsiveness
-- Add install support
-- Improve offline asset handling
-
-### Phase 6: Deployment and CI/CD
-
-- Deploy frontend
-- Deploy API Gateway
-- Deploy microservices
-- Connect custom domains
-- Add GitHub Actions
-- Add basic automated checks
-
----
-
-## Deployment Strategy
-
-The project will avoid Docker, Nginx, and Kubernetes for the initial deployment.
-
-Instead, it will use:
+### Analytics Database
 
 ```text
-Cloudflare Workers for APIs
-Cloudflare DNS and HTTPS
-Cloudflare-hosted frontend or compatible Next.js hosting
-Supabase-hosted PostgreSQL databases
-Supabase Storage for uploaded media
+workout_summaries
+- id
+- tenant_id
+- user_id
+- period_type
+- period_start
+- workout_count
+- total_duration
+- total_volume
+- updated_at
+
+nutrition_summaries
+- id
+- tenant_id
+- user_id
+- period_type
+- period_start
+- calories
+- protein
+- carbohydrates
+- fat
+- updated_at
+
+progress_metrics
+- id
+- tenant_id
+- user_id
+- metric_type
+- metric_value
+- measured_at
+
+processed_events
+- event_id
+- consumer_name
+- processed_at
 ```
 
-This keeps hosting costs low while still allowing a real microservice architecture.
+---
+
+### Notification Database
+
+```text
+notifications
+- id
+- tenant_id
+- recipient_user_id
+- actor_user_id
+- notification_type
+- reference_id
+- message
+- read_at
+- created_at
+
+notification_preferences
+- id
+- user_id
+- likes_enabled
+- comments_enabled
+- follows_enabled
+- push_enabled
+- email_enabled
+- updated_at
+
+processed_events
+- event_id
+- consumer_name
+- processed_at
+```
+
+---
+
+## CI/CD and Deployment Flow
+
+The intended deployment flow is:
+
+```text
+Developer
+-> Git Push
+-> GitHub Repository
+-> GitHub Actions
+-> Automated Tests
+-> Docker Image Build
+-> GitHub Container Registry
+-> Kubernetes Manifest or Helm Update
+-> K3s Pulls New Image
+-> Kubernetes Rolling Deployment
+```
+
+If Argo CD is introduced, the flow becomes:
+
+```text
+GitHub Repository
+-> Argo CD Detects Desired-State Change
+-> Argo CD Synchronizes K3s Cluster
+-> Kubernetes Performs Rolling Deployment
+```
+
+Argo CD should be described as planned until it is configured in the repository.
+
+---
+
+## Development Phases
+
+### Phase 1: Project Foundation
+
+* Set up monorepo
+* Set up Next.js TypeScript application
+* Add PWA configuration
+* Create initial service projects
+* Add Dockerfiles
+* Configure local development
+* Create shared code packages
+* Create architecture diagrams
+
+### Phase 2: Kubernetes Foundation
+
+* Install and configure K3s
+* Create Plate namespace
+* Configure Nginx Ingress Controller
+* Configure Cloudflare routing
+* Configure Kubernetes Secrets and ConfigMaps
+* Create initial Deployments and Services
+* Configure persistent storage
+
+### Phase 3: Authentication and Tenants
+
+* Register users
+* Log in users
+* Create sessions
+* Create tenants
+* Add tenant memberships
+* Add tenant roles
+* Add user profiles
+* Add tenant settings
+
+### Phase 4: Workout Tracking
+
+* Create workout logs
+* Add exercises
+* Add workout sets
+* Add workout templates
+* Retrieve workout history
+* Publish workout domain events
+
+### Phase 5: Nutrition Logging
+
+* Integrate external nutrition API
+* Create meal logs
+* Add meal entries
+* Track calories and macros
+* Add nutrition targets
+* Publish nutrition domain events
+
+### Phase 6: Event Infrastructure
+
+* Deploy Kafka
+* Deploy Kafka Connect
+* Configure Debezium
+* Add outbox tables
+* Configure Kafka topics
+* Add consumer groups
+* Add retry handling
+* Add dead-letter topics
+* Add processed-event tracking
+
+### Phase 7: Social Platform
+
+* Create posts
+* Display feeds
+* Display user profile feeds
+* Add likes
+* Add comments
+* Add follows
+* Publish social domain events
+
+### Phase 8: Analytics and Notifications
+
+* Create workout summaries
+* Create nutrition summaries
+* Create progress metrics
+* Add in-app notifications
+* Add notification preferences
+
+### Phase 9: PWA Polish
+
+* Add application manifest
+* Add service worker
+* Improve mobile responsiveness
+* Add install support
+* Improve offline asset handling
+* Add loading and error states
+
+### Phase 10: CI/CD and Observability
+
+* Add GitHub Actions
+* Push images to GitHub Container Registry
+* Add automated Kubernetes deployments
+* Add readiness and liveness probes
+* Add centralized logging
+* Add metrics and monitoring
+* Add backup automation
+
+---
+
+## Failure Handling
+
+Plate should account for the following failure scenarios.
+
+### Duplicate Events
+
+Consumers use processed-event records to avoid applying the same event more than once.
+
+### Consumer Failures
+
+Failed event processing may use:
+
+* Retry topics
+* Delayed retries
+* Dead-letter topics
+* Error logging
+* Manual replay tooling
+
+### External Nutrition API Failure
+
+The Nutrition Service should:
+
+* Return a clear error when live nutrition lookup is unavailable
+* Allow retrying the lookup
+* Avoid saving incomplete food records
+* Use cached nutrition data where appropriate
+
+### Pod Failure
+
+Kubernetes restarts failed Pods.
+
+Readiness probes prevent unhealthy Pods from receiving traffic.
+
+Liveness probes restart Pods that become unresponsive.
+
+### Kafka Downtime
+
+Business requests can continue saving domain data and outbox events while Kafka or Kafka Connect is temporarily unavailable.
+
+The unpublished outbox records remain in PostgreSQL until the event infrastructure recovers.
+
+### Database Failure
+
+The service should fail the transaction and return an error without partially saving business data or outbox events.
+
+### Failed Deployment
+
+Kubernetes rolling updates and readiness checks reduce the chance of sending traffic to an unhealthy version.
+
+Rollback procedures will be documented as deployment automation is introduced.
+
+---
+
+## Security Boundaries
+
+The Plate security model includes:
+
+* Cloudflare-managed public DNS and TLS
+* Public traffic through Kubernetes Ingress
+* Internal ClusterIP Services
+* Private PostgreSQL databases
+* Private Kafka infrastructure
+* Kubernetes Secrets for credentials
+* Backend tenant authorization
+* Trusted authentication context
+* Minimum container privileges
+* No secrets embedded in Docker images
+* Private server administration through SSH or Tailscale
+
+Tenant access must be enforced by backend services, not only by frontend navigation.
+
+---
+
+## Observability
+
+Planned observability capabilities include:
+
+* Structured application logs
+* Kubernetes Pod logs
+* Health endpoints
+* Readiness probes
+* Liveness probes
+* Service metrics
+* Kafka consumer lag monitoring
+* Database health monitoring
+* Failed event monitoring
+* Distributed tracing
+* Deployment status monitoring
+
+Possible tools include:
+
+```text
+Prometheus
+Grafana
+Loki
+OpenTelemetry
+```
+
+These tools should only be described as implemented once they exist in the repository or cluster.
 
 ---
 
 ## Future Improvements
 
-Possible future features:
+Possible future capabilities include:
 
-- Push notifications
-- Workout streaks
-- Food and workout analytics
-- Progress charts
-- Media uploads
-- User search
-- Tenant search
-- Private accounts
-- Content moderation
-- Challenge system
-- Leaderboards
-- AI-generated workout summaries
-- Barcode scanning for food items
-- Wearable integration
+* Push notifications
+* Email notifications
+* Workout streaks
+* Progress charts
+* Media uploads
+* Barcode scanning
+* Wearable integration
+* Fitness challenges
+* Leaderboards
+* User search
+* Tenant search
+* Private accounts
+* Content moderation
+* AI-generated workout summaries
+* AI-assisted meal analysis
+* Horizontal Pod Autoscaling
+* Additional K3s worker nodes
+* Replicated Kafka
+* Highly available PostgreSQL
+* Distributed persistent storage
+* Automated off-site backups
+* Advanced secret management
+
+---
+
+## Architecture Documentation
+
+Detailed system architecture documentation is located at:
+
+```text
+docs/PLATE_SYSTEM_ARCHITECTURE.md
+```
+
+Architecture diagrams are located under:
+
+```text
+docs/diagrams/
+```
+
+The diagrams include:
+
+* Use case diagram
+* Activity diagrams
+* Class diagram
+* Service ERDs
+* System architecture diagram
+* Kubernetes deployment diagram
+* Event-flow or sequence diagrams
 
 ---
 
 ## Architecture Summary
 
-Plate is designed as a multi-tenant, microservice-based social fitness PWA.
+Plate is a multi-tenant, microservice-based social fitness PWA.
 
-The architecture uses:
-
-```text
-Next.js + TypeScript PWA
-Cloudflare Worker API Gateway
-Cloudflare Worker microservices
-Supabase PostgreSQL databases
-Supabase Storage
-```
-
-The system is separated into three main business services:
+The target architecture uses:
 
 ```text
-Auth / Tenant Service
-Fitness Logging Service
-Social Feed Service
+Next.js and TypeScript
+Node.js domain services
+PostgreSQL service-owned databases
+Transactional outbox pattern
+Debezium
+Kafka Connect
+Apache Kafka
+Docker
+Kubernetes
+K3s
+Nginx Ingress Controller
+Cloudflare
+GitHub Actions
+GitHub Container Registry
 ```
 
-This design keeps the frontend clean, separates backend responsibilities, supports future scaling, and avoids unnecessary infrastructure costs during the MVP stage.
+The primary domain services are:
+
+```text
+Identity and Tenant Service
+Workout Service
+Nutrition Service
+Social Service
+Analytics Service
+Notification Service
+```
+
+Plate services do not directly communicate with one another for domain synchronization.
+
+Each service writes its domain data and an outbox event within the same database transaction. Debezium captures the event and publishes it to Kafka, where interested services consume it and update their own data independently.
+
+The initial deployment will run on a single Ubuntu home server using K3s, with an architecture that can later expand to additional Kubernetes worker nodes and more resilient infrastructure.

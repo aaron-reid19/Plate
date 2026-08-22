@@ -2,131 +2,139 @@
 skinparam classAttributeIconSize 0
 left to right direction
 
-class Tenant {
-  +UUID id
-  +String name
-  +String slug
-  +String plan
-  +DateTime createdAt
-  +configureAccount()
-  +updateSettings()
+package "Auth / Tenant Service" {
+  class Tenant {
+    +UUID id
+    +String name
+    +String slug
+    +String plan
+    +DateTime createdAt
+    +configureAccount()
+    +updateSettings()
+  }
+
+  class TenantSettings {
+    +UUID id
+    +String defaultPostVisibility
+    +Boolean allowPublicDiscovery
+    +Boolean allowComments
+    +DateTime updatedAt
+  }
+
+  class User {
+    +UUID id
+    +String username
+    +String email
+    +String passwordHash
+    +UserRole role
+    +DateTime createdAt
+    +register()
+    +login()
+    +updateProfile()
+    +followUser()
+  }
+
+  class UserProfile {
+    +UUID id
+    +String displayName
+    +String bio
+    +String profileImageUrl
+    +String fitnessGoal
+    +viewProfile()
+    +viewUserFeed()
+  }
 }
 
-class TenantSettings {
-  +UUID id
-  +String defaultPostVisibility
-  +Boolean allowPublicDiscovery
-  +Boolean allowComments
-  +DateTime updatedAt
+package "Social Feed Service" {
+  class Post {
+    +UUID id
+    +PostType postType
+    +String caption
+    +String mediaUrl
+    +PostVisibility visibility
+    +DateTime createdAt
+    +createPost()
+    +editPost()
+    +deletePost()
+  }
+
+  class Comment {
+    +UUID id
+    +String body
+    +DateTime createdAt
+    +editComment()
+    +deleteComment()
+  }
+
+  class Like {
+    +UUID id
+    +DateTime createdAt
+  }
+
+  class Follow {
+    +UUID id
+    +DateTime createdAt
+  }
+
+  class UserFeed {
+    +UUID id
+    +getPosts()
+    +filterPosts()
+  }
 }
 
-class User {
-  +UUID id
-  +String username
-  +String email
-  +String passwordHash
-  +UserRole role
-  +DateTime createdAt
-  +register()
-  +login()
-  +updateProfile()
-  +followUser()
+package "Workout Logging Service" {
+  class Workout {
+    +UUID id
+    +String title
+    +String workoutType
+    +Integer durationMinutes
+    +String notes
+    +DateTime createdAt
+    +addExercise()
+    +removeExercise()
+  }
+
+  class Exercise {
+    +UUID id
+    +String name
+    +String muscleGroup
+    +String notes
+  }
+
+  class WorkoutSet {
+    +UUID id
+    +Integer setNumber
+    +Integer reps
+    +Decimal weight
+    +Integer restSeconds
+  }
 }
 
-class UserProfile {
-  +UUID id
-  +String displayName
-  +String bio
-  +String profileImageUrl
-  +String fitnessGoal
-  +viewProfile()
-  +viewUserFeed()
-}
+package "Nutrition Logging Service" {
+  class FoodLog {
+    +UUID id
+    +String mealType
+    +String title
+    +Integer calories
+    +Decimal protein
+    +Decimal carbs
+    +Decimal fat
+    +String notes
+    +DateTime createdAt
+    +addFoodItem()
+  }
 
-class Post {
-  +UUID id
-  +PostType postType
-  +String caption
-  +String mediaUrl
-  +PostVisibility visibility
-  +DateTime createdAt
-  +createPost()
-  +editPost()
-  +deletePost()
-}
-
-class Workout {
-  +UUID id
-  +String title
-  +String workoutType
-  +Integer durationMinutes
-  +String notes
-  +DateTime createdAt
-  +addExercise()
-  +removeExercise()
-}
-
-class Exercise {
-  +UUID id
-  +String name
-  +String muscleGroup
-  +String notes
-}
-
-class WorkoutSet {
-  +UUID id
-  +Integer setNumber
-  +Integer reps
-  +Decimal weight
-  +Integer restSeconds
-}
-
-class FoodLog {
-  +UUID id
-  +String mealType
-  +String title
-  +Integer calories
-  +Decimal protein
-  +Decimal carbs
-  +Decimal fat
-  +String notes
-  +DateTime createdAt
-  +addFoodItem()
-}
-
-class FoodItem {
-  +UUID id
-  +String name
-  +Integer calories
-  +Decimal protein
-  +Decimal carbs
-  +Decimal fat
-  +Decimal quantity
-  +String unit
-}
-
-class Comment {
-  +UUID id
-  +String body
-  +DateTime createdAt
-  +editComment()
-  +deleteComment()
-}
-
-class Like {
-  +UUID id
-  +DateTime createdAt
-}
-
-class Follow {
-  +UUID id
-  +DateTime createdAt
-}
-
-class UserFeed {
-  +UUID id
-  +getPosts()
-  +filterPosts()
+  class FoodItem {
+    +UUID id
+    +String name
+    +Integer calories
+    +Decimal protein
+    +Decimal carbs
+    +Decimal fat
+    +Decimal quantity
+    +String unit
+  }
 }
 
 enum UserRole {

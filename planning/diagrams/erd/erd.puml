@@ -1,22 +1,53 @@
 @startuml
 hide circle
+skinparam backgroundColor #F6F1E8
+skinparam defaultFontName Helvetica
+skinparam dpi 160
+skinparam shadowing true
+skinparam roundCorner 18
+skinparam ArrowColor #6A5C4A
+skinparam ArrowThickness 1.2
 skinparam linetype ortho
 skinparam packageStyle rectangle
+skinparam TitleFontSize 22
+skinparam TitleFontColor #1F2937
+skinparam TitleBorderColor #D6C7AE
+skinparam TitleBackgroundColor #F3E6CF
+skinparam rectangle {
+  BorderColor #8E7A5B
+  FontColor #2A2A33
+}
+skinparam entity {
+  BackgroundColor #FFF9F0
+  BorderColor #9B8562
+  FontColor #2A2A33
+}
+skinparam entity<<External>> {
+  BackgroundColor #FFF0DD
+  BorderColor #D38B3C
+}
 skinparam rectangle<<AuthTenant>> {
-  BackgroundColor #D9EAD3
+  BackgroundColor #D9F0E4
+  BorderColor #4C8B6F
 }
 skinparam rectangle<<FitnessLogging>> {
-  BackgroundColor #DDEBF7
+  BackgroundColor #DCEBFA
+  BorderColor #4E79A7
+}
+skinparam rectangle<<NutritionLogging>> {
+  BackgroundColor #F5DDF2
+  BorderColor #9B5E9A
 }
 skinparam rectangle<<SocialFeed>> {
-  BackgroundColor #FCE5CD
+  BackgroundColor #FCE2CF
+  BorderColor #C26A3D
 }
 
 title Plate Multi-Tenant Microservices ERD
 
 rectangle "Auth / Tenant Service" <<AuthTenant>> as AuthTenantService {
 
-  entity "tenants" as tenants {
+  entity "tenants" as tenants <<External>> {
     * id : UUID <<PK>>
     --
     * name : VARCHAR
@@ -36,7 +67,7 @@ rectangle "Auth / Tenant Service" <<AuthTenant>> as AuthTenantService {
     * updated_at : TIMESTAMP
   }
 
-  entity "users" as users {
+  entity "users" as users <<External>> {
     * id : UUID <<PK>>
     --
     * tenant_id : UUID <<FK>>
@@ -59,7 +90,7 @@ rectangle "Auth / Tenant Service" <<AuthTenant>> as AuthTenantService {
   }
 }
 
-rectangle "Fitness Logging Service" <<FitnessLogging>> as FitnessLoggingService {
+rectangle "Workout Logging Service" <<FitnessLogging>> as FitnessLoggingService {
 
   entity "workouts" as workouts {
     * id : UUID <<PK>>
@@ -93,6 +124,10 @@ rectangle "Fitness Logging Service" <<FitnessLogging>> as FitnessLoggingService 
     * rest_seconds : INT
   }
 
+}
+
+rectangle "Nutrition Logging Service" <<NutritionLogging>> as NutritionLoggingService {
+
   entity "food_logs" as food_logs {
     * id : UUID <<PK>>
     --
@@ -125,7 +160,7 @@ rectangle "Fitness Logging Service" <<FitnessLogging>> as FitnessLoggingService 
 
 rectangle "Social Feed Service" <<SocialFeed>> as SocialFeedService {
 
-  entity "posts" as posts {
+  entity "posts" as posts <<External>> {
     * id : UUID <<PK>>
     --
     * tenant_id : UUID <<external ref>>
